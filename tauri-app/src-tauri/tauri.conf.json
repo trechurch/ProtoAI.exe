@@ -41,6 +41,12 @@
     ],
     "resources": [
       "../../server/**/*"
-    ]
+    ],
+    "createUpdaterArtifacts": false
+  },
+  "plugins": {
+    "updater": {
+      "active": false
+    }
   }
 }

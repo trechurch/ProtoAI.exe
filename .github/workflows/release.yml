@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: tauri-app/package.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install frontend + Tauri deps
+        run: npm install
+        working-directory: tauri-app
+
+      - name: Build ProtoAI
+        run: npm run tauri build
+        working-directory: tauri-app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            tauri-app/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            tauri-app/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true

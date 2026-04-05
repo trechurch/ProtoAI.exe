@@ -1,9 +1,18 @@
+# Line endings
+* text=auto
+
 # Node
 node_modules/
-package-lock.json
+*-lock.json
 
-# Tauri build
-tauri-app/src-tauri/target/
+# Rust
+**/target/
+*.rs.bk
+*.pdb
+
+# Tauri auto-generated
+src-tauri/gen/
+!tauri-app/src-tauri/gen/
 
 # Distribution
 dist/
