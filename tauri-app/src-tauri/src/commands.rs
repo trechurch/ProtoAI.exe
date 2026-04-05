@@ -150,3 +150,37 @@ pub fn ping() -> String {
 pub fn get_status() -> String {
     "ok".into()
 }
+
+// -----------------------------
+// settings
+// -----------------------------
+#[tauri::command]
+pub async fn settings_get(bridge: State<'_, BridgeState>) -> Result<Value, String> {
+    with_bridge!(bridge, |b| b.get_settings())
+}
+
+#[tauri::command]
+pub async fn settings_set(
+    bridge: State<'_, BridgeState>,
+    key: String,
+    value: Value,
+) -> Result<Value, String> {
+    with_bridge!(bridge, |b| b.set_settings(key, value))
+}
+
+#[tauri::command]
+pub async fn settings_test_key(
+    bridge: State<'_, BridgeState>,
+    provider: String,
+    key: String,
+) -> Result<Value, String> {
+    with_bridge!(bridge, |b| b.test_api_key(provider, key))
+}
+
+#[tauri::command]
+pub async fn settings_first_run_status(bridge: State<'_, BridgeState>) -> Result<Value, String> {
+    let settings = with_bridge!(bridge, |b| b.get_settings())?;
+    Ok(serde_json::json!({
+        "firstRunCompleted": settings["firstRunCompleted"].as_bool().unwrap_or(false)
+    }))
+}

@@ -43,6 +43,10 @@ const projectRepo = new FsProjectRepository();
 const memoryRepo = new FsMemoryRepository();
 const profileRepo = new FsProfileRepository();
 
+// Settings
+const SettingsManager = require("./lib/SettingsManager");
+const settingsManager = new SettingsManager(paths.data("settings.json"));
+
 const PORT = 17890;
 
 // UI directory
@@ -215,6 +219,39 @@ function handleProfiles(req, res) {
     sendJSON(res, { profiles });
 }
 
+// GET /settings
+function handleGetSettings(req, res) {
+    sendJSON(res, { settings: settingsManager.exportAll() });
+}
+
+// POST /settings
+function handleSetSettings(req, res) {
+    readBody(req, body => {
+        let parsed;
+        try { parsed = JSON.parse(body); } catch { return sendJSON(res, { error: "Invalid JSON" }); }
+        const { action, key, value } = parsed;
+        if (action === "set") {
+            if (key && value !== undefined) {
+                settingsManager.set(key, value);
+            } else if (value !== undefined) {
+                settingsManager.importAll(value);
+            }
+        }
+        sendJSON(res, { settings: settingsManager.exportAll() });
+    });
+}
+
+// POST /settings/test-key
+function handleTestKey(req, res) {
+    readBody(req, async body => {
+        let parsed;
+        try { parsed = JSON.parse(body); } catch { return sendJSON(res, { error: "Invalid JSON" }); }
+        const { provider, key } = parsed;
+        const result = await settingsManager.validateApiKey(provider, key);
+        sendJSON(res, result);
+    });
+}
+
 // GET /sessions/:project
 function handleListSessions(req, res, project) {
     const sessions = projectRepo.listChatSessions(project);
@@ -257,6 +294,9 @@ const server = http.createServer((req, res) => {
         return handleListSessions(req, res, project);
     }
     if (req.method === "POST" && url === "/sessions") return handleChatSessions(req, res);
+    if (req.method === "GET" && url === "/settings") return handleGetSettings(req, res);
+    if (req.method === "POST" && url === "/settings") return handleSetSettings(req, res);
+    if (req.method === "POST" && url === "/settings/test-key") return handleTestKey(req, res);
 
     res.writeHead(404);
     res.end("Not found");

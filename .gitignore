@@ -37,6 +37,9 @@ runtime/
 # Data (local dev only)
 data/
 
+# Settings (user-specific, never committed)
+server/data/settings.json
+
 # Compiled binaries
 **/*.exe
 **/*.msi

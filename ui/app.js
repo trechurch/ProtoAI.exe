@@ -466,13 +466,14 @@ async function init() {
   // Global keyboard shortcuts
   document.addEventListener("keydown", e => {
     if (e.key === "?" && e.shiftKey)              { showShortcutOverlay(); return; }
-    if (e.key === "Escape")                        { hideShortcutOverlay(); hideCommandPalette(); return; }
+    if (e.key === "Escape")                        { hideShortcutOverlay(); hideCommandPalette(); window.closeSettingsPanel?.(); return; }
     if (e.ctrlKey && e.key === "Enter")            { e.preventDefault(); sendMessageFromUI(); }
     if (e.ctrlKey && e.key === "k")               { e.preventDefault(); toggleCommandPalette(); }
     if (e.ctrlKey && e.key === "/")                { e.preventDefault(); cycleSplitMode(); }
     if (e.ctrlKey && e.shiftKey && e.key === "N") { e.preventDefault(); onNewProject(); }
     if (e.ctrlKey && e.shiftKey && e.key === "C") { e.preventDefault(); onNewChat(); }
     if (e.ctrlKey && e.shiftKey && e.key === "M") { e.preventDefault(); document.getElementById("otfmsEngineSelect").focus(); }
+    if (e.ctrlKey && e.shiftKey && e.key === "S") { e.preventDefault(); window.openSettingsPanel?.(); return; }
     if (e.ctrlKey && e.shiftKey && e.key === "F") { e.preventDefault(); document.getElementById("fileInput").click(); }
     if (e.altKey && e.key === "f")               { e.preventDefault();
                                                         const fi = document.getElementById("folderInput");
@@ -1505,6 +1506,7 @@ function showCommandPalette() {
     { label: "✏️ Spellcheck Last Message", action: () => triggerWorkflowAction("SpellcheckWorkflow") },
     { label: "ℹ️ Version Info",          action: () => triggerWorkflowAction("VersionInfoWorkflow") },
     { label: "🔍 Check for Updates",    action: () => window.checkForUpdates?.() },
+    { label: "⚙️ Open Settings",         action: () => window.openSettingsPanel?.() },
     { label: "📋 Export Chat",           action: exportChat },
     { label: "⌨️ Keyboard Shortcuts",   action: showShortcutOverlay },
   ];
@@ -1993,7 +1995,41 @@ function showNewProfileDialog(baseProfile) {
 // Start
 // ============================================================
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
+  // First-run detection — check settings, show wizard if needed
+  try {
+    let firstRun = true;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      if (typeof window.__TAURI__?.core?.invoke === "function") {
+        try {
+          const status = await window.__TAURI__.core.invoke("settings_first_run_status", {});
+
+          firstRun = !!status.firstRunCompleted === false;
+          break;
+        } catch (_) {}
+      }
+      // HTTP fallback
+      if (attempt > 0) {
+        try {
+          const r = await fetch("http://127.0.0.1:17890/settings");
+
+          const data = await r.json();
+
+          firstRun = !data?.settings?.firstRunCompleted;
+          break;
+        } catch (_) {}
+      }
+      await new Promise(res => setTimeout(res, 800));
+    }
+    if (!firstRun === false) {
+      // firstRun is false (meaning firstRunCompleted is true) — proceed normally
+    }
+    if (firstRun) {
+      window.openFirstRunWizard?.();
+      return;
+    }
+  } catch (_) {}
+
   init();
 
   // Click on the profile badge shows detail

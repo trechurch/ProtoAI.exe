@@ -176,4 +176,33 @@ impl EngineBridge {
     pub async fn ingest(&self, project: String) -> Result<serde_json::Value> {
         self.send_request("ingest", serde_json::json!({ "project": project })).await
     }
+
+    // Settings
+    pub async fn get_settings(&self) -> Result<serde_json::Value> {
+        self.send_request("settings", serde_json::json!({ "action": "get" })).await
+    }
+
+    pub async fn set_settings(
+        &self,
+        key: String,
+        value: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        self.send_request(
+            "settings",
+            serde_json::json!({ "action": "set", "key": key, "value": value }),
+        )
+        .await
+    }
+
+    pub async fn test_api_key(
+        &self,
+        provider: String,
+        key: String,
+    ) -> Result<serde_json::Value> {
+        self.send_request(
+            "settings",
+            serde_json::json!({ "action": "testKey", "provider": provider, "value": key }),
+        )
+        .await
+    }
 }

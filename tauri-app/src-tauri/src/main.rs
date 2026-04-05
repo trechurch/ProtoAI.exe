@@ -149,6 +149,10 @@ fn main() {
             commands::engine_chat,
             commands::engine_upload,
             commands::engine_ingest,
+            commands::settings_get,
+            commands::settings_set,
+            commands::settings_test_key,
+            commands::settings_first_run_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ProtoAI Tauri application");

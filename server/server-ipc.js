@@ -60,6 +60,10 @@ const projectRepo = new FsProjectRepository();
 const memoryRepo = new FsMemoryRepository();
 const profileRepo = new FsProfileRepository();
 
+// Settings
+const SettingsManager = require("./lib/SettingsManager");
+const settingsManager = new SettingsManager(paths.data("settings.json"));
+
 // Logging
 const LOG_FILE = paths.data("logs", "server-ipc.log");
 fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
@@ -238,6 +242,25 @@ async function handleDeepSearchIPC(payload) {
   }
 }
 
+// settings: get all, set key, test key
+async function handleSettingsIPC(payload) {
+  const { action, key, value, provider } = payload || {};
+  if (action === "get") return { settings: settingsManager.exportAll() };
+  if (action === "set") {
+    if (key && value !== undefined) {
+      settingsManager.set(key, value);
+    } else if (value !== undefined) {
+      settingsManager.importAll(value);
+    }
+    return { settings: settingsManager.exportAll() };
+  }
+  if (action === "testKey") {
+    const result = await settingsManager.validateApiKey(provider, value);
+    return result;
+  }
+  return { ok: false, error: "Unknown settings action" };
+}
+
 // -----------------------------------------------------------------------------
 // IPC message dispatcher
 // -----------------------------------------------------------------------------
@@ -271,6 +294,8 @@ async function dispatchMessage(msg) {
       result = await handleImageGenIPC(payload); break;
     case "deep_search":
       result = await handleDeepSearchIPC(payload); break;
+    case "settings":
+      result = await handleSettingsIPC(payload); break;
     default:
       return { id, ok: false, error: `Unknown message type: ${type}` };
   }
