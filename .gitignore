@@ -1,0 +1,36 @@
+# Node
+node_modules/
+package-lock.json
+
+# Tauri build
+tauri-app/src-tauri/target/
+
+# Distribution
+dist/
+build/
+
+# Secrets
+data/secret.key
+**/secret.key
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Runtime (local dev only)
+runtime/
+
+# Data (local dev only)
+data/
+
+# Compiled binaries
+**/*.exe
+**/*.msi
+**/*.dmg
+**/*.AppImage
+.claude/settings.local.json

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ProtoAI – Dev Console</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>html{background:#0d0d0d!important;}</style>
+</head>
+
+<body style="background:#0d0d0d;margin:0;">
+  <div id="app">
+
+    <!-- LEFT SIDEBAR -->
+    <aside id="sidebar-left">
+      <div class="sidebar-header">
+        <div>
+          <h1>ProtoAI</h1>
+          <div class="tagline">
+            A UI that feels like VS Code + Cursor + Claude + Notion had a child.
+          </div>
+        </div>
+        <button id="newProjectBtn" class="primary">+ New Project</button>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-title">Projects</div>
+        <ul id="projectList" class="list"></ul>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-title">Chats</div>
+        <div id="chatTabs" class="tabs"></div>
+        <button id="newChatBtn" class="secondary full-width">+ New Chat</button>
+      </div>
+    </aside>
+
+    <!-- MAIN AREA -->
+    <main id="main">
+
+      <!-- HEADER -->
+      <header id="main-header">
+        <div class="main-title">
+          <span id="currentProjectName">No project selected</span>
+          <span id="currentProfileName" class="badge">No profile</span>
+        </div>
+
+        <div class="main-controls">
+          <button id="splitToggleBtn" class="icon-btn" title="Toggle split view">⧉</button>
+          <button id="toggleCanvasBtn" class="icon-btn" title="Collapse/Expand Canvas">⤢</button>
+        </div>
+      </header>
+
+      <!-- WORKSPACE -->
+      <section id="workspace">
+
+        <!-- LEFT PANE (Chat) -->
+        <div id="pane-left">
+          <div id="canvas">
+            <div id="chatContainer">
+            <div class="chat-empty-state" id="chatEmptyState">
+              <img class="empty-logo" src="icon.png" alt="ProtoAI" draggable="false" />
+              <div class="empty-title">ProtoAI</div>
+              <div class="empty-hint">Select a project from the sidebar to begin</div>
+            </div>
+          </div>
+          </div>
+        </div>
+
+        <!-- RIGHT PANE -->
+        <div id="pane-right">
+          <div id="rightModeTabs" class="tabs small">
+            <button data-mode="files" class="tab active">Files</button>
+            <button data-mode="code" class="tab">Code</button>
+            <button data-mode="tools" class="tab">Tools</button>
+            <button data-mode="browser" class="tab">Browser</button>
+          </div>
+          <div id="rightPaneContent"></div>
+        </div>
+
+      </section>
+
+      <!-- INPUT BAR -->
+      <section id="inputBar">
+
+        <div id="inputTopRow">
+          <select id="profileSelect"></select>
+          <select id="engineSelect"></select>
+          <button id="spellcheckToggle" class="toggle-btn mode-local" title="Spellcheck: ON">ABC ✓</button>
+          <button id="attachFileBtn" class="icon-btn" title="Attach folder (Ctrl+click for single file)">📎</button>
+          <button id="addSourceBtn" class="icon-btn" title="Add sources">📚</button>
+        </div>
+
+        <div id="inputMiddleRow">
+          <textarea id="messageInput" rows="3"
+            placeholder="Ask ProtoAI… (Shift+Enter for newline)"></textarea>
+        </div>
+
+        <div id="inputBottomRow">
+          <div class="input-actions">
+            <button class="chip" data-action="image">🖼 Prompt Creator</button>
+            <button class="chip" data-action="image_gen">🖼️ Generate Image</button>
+            <button class="chip" data-action="deepsearch">🔎 Research Assistant</button>
+            <button class="chip" data-action="podcast">🎙 Script Writer</button>
+            <button class="chip" data-action="quiz">🧠 Take a Quiz</button>
+            <button class="chip" data-action="connectors">🔌 Use Connectors</button>
+          </div>
+          <button id="sendBtn" class="primary">Send</button>
+        </div>
+
+        <input type="file" id="fileInput" multiple style="display:none;" />
+        <input type="file" id="folderInput" webkitdirectory multiple style="display:none;" />
+      </section>
+
+    </main>
+
+    <!-- RIGHT SIDEBAR -->
+    <aside id="sidebar-right">
+
+      <div class="sidebar-section">
+        <div class="section-title">Model Swap</div>
+        <div id="otfmsPanel">
+          <select id="otfmsEngineSelect"></select>
+          <button id="applyEngineBtn" class="secondary full-width">⚡ Apply to Chat</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-title">
+          Files <span id="fileCount" class="count-badge">0</span>
+        </div>
+        <ul id="fileList" class="list small"></ul>
+        <div id="fileListEmpty" class="list-empty">No files attached</div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-title">Quick Actions</div>
+        <div class="action-list">
+          <button class="action-item" data-action="image">🖼 Prompt Creator</button>
+          <button class="action-item" data-action="image_gen">🖼️ Generate Image</button>
+          <button class="action-item" data-action="deepsearch">🔎 Research Assistant</button>
+          <button class="action-item" data-action="podcast">🎙 Script Writer</button>
+          <button class="action-item" data-action="quiz">🧠 Take a Quiz</button>
+          <button class="action-item" data-action="connectors">🔌 Connectors</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-title">Backend</div>
+        <div class="status-row">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="sidebarStatusText">Connecting…</span>
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- SHORTCUT OVERLAY -->
+  <div id="shortcutOverlay" class="hidden">
+    <div class="overlay-content">
+      <h2>Keyboard Shortcuts</h2>
+      <ul>
+        <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> – Send message</li>
+        <li><kbd>Shift</kbd>+<kbd>Enter</kbd> – Newline</li>
+        <li><kbd>Ctrl</kbd>+<kbd>K</kbd> – Command palette</li>
+        <li><kbd>Ctrl</kbd>+<kbd>/</kbd> – Toggle split screen</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> – New project</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> – New chat</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> – Focus OTFMS</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> – Attach file</li>
+        <li><kbd>Alt</kbd>+<kbd>F</kbd> – Attach folder (recursive)</li>
+        <li><kbd>Esc</kbd> – Close overlay</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- LOCAL LIBRARIES -->
+  <script src="./lib/marked.min.js"></script>
+  <script src="./lib/monaco/vs/loader.js"></script>
+
+  <!-- MAIN APP -->
+  <script src="app.js"></script>
+
+</body>
+</html>
