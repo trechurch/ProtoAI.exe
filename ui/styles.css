@@ -555,6 +555,7 @@ aside {
 }
 
 @keyframes blink { 50% { opacity: 0; } }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 /* ============================================================
    Toast (BTW double-send notification)

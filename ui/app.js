@@ -1504,6 +1504,7 @@ function showCommandPalette() {
     { label: "⧉ Toggle Split View",     action: cycleSplitMode },
     { label: "✏️ Spellcheck Last Message", action: () => triggerWorkflowAction("SpellcheckWorkflow") },
     { label: "ℹ️ Version Info",          action: () => triggerWorkflowAction("VersionInfoWorkflow") },
+    { label: "🔍 Check for Updates",    action: () => window.checkForUpdates?.() },
     { label: "📋 Export Chat",           action: exportChat },
     { label: "⌨️ Keyboard Shortcuts",   action: showShortcutOverlay },
   ];

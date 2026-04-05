@@ -44,6 +44,10 @@
           <span id="currentProjectName">No project selected</span>
           <span id="currentProfileName" class="badge">No profile</span>
         </div>
+        <div class="version-info">
+          <span id="versionBadge" class="badge version">v</span>
+          <span id="updateDot" class="update-dot" title="Checking for updates..."></span>
+        </div>
 
         <div class="main-controls">
           <button id="splitToggleBtn" class="icon-btn" title="Toggle split view">⧉</button>
@@ -182,6 +186,36 @@
 
   <!-- MAIN APP -->
   <script src="app.js"></script>
+
+  <!-- UPDATER -->
+  <script src="updater.js"></script>
+
+  <!-- VERSION BADGE + UPDATE INDICATOR -->
+  <script>
+    (function() {
+      const v = typeof APP_VERSION === "string" ? APP_VERSION : "?";
+      const badge = document.getElementById("versionBadge");
+      const dot = document.getElementById("updateDot");
+      if (badge) badge.textContent = "v" + v;
+      // Show a pulsing dot while checking, turns to text when done
+      let done = true;
+      const iv = setInterval(() => {
+        if (!window.UPDATER_CHECKING) {
+          clearInterval(iv);
+          if (!window.LATEST_VERSION || window.LATEST_VERSION === v) {
+            dot.title = "Up to date";
+          }
+        }
+      }, 500);
+    })();
+  </script>
+
+  <!-- STYLES FOR VERSION BADGE / UPDATE DOT -->
+  <style>
+    .version-info { display: flex; align-items: center; gap: 6px; }
+    .version-info .badge.version { font-size: 11px; opacity: 0.7; }
+    .update-dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; }
+  </style>
 
 </body>
 </html>

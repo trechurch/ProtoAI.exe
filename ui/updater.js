@@ -60,9 +60,27 @@
 
   // Auto-check on load
   window.addEventListener("load", () => {
+    window.UPDATER_CHECKING = true;
     setTimeout(async () => {
       const update = await checkForUpdates();
-      if (update) showUpdatePrompt(update);
+      window.UPDATER_CHECKING = false;
+      if (update) {
+        window.LATEST_VERSION = update.version;
+        showUpdatePrompt(update);
+        // Turn dot red + clickable
+        const dot = document.getElementById("updateDot");
+        if (dot) {
+          dot.style.background = "#f87171";
+          dot.style.cursor = "pointer";
+          dot.style.animation = "pulse-dot 2s infinite";
+          dot.title = "Update available: v" + update.version;
+          dot.onclick = () => showUpdatePrompt(update);
+        }
+      } else {
+        window.LATEST_VERSION = CURRENT;
+        const dot = document.getElementById("updateDot");
+        if (dot) dot.style.background = "#4ade80";
+      }
     }, 2000);
   });
 
