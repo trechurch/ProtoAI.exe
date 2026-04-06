@@ -2,7 +2,6 @@
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
-const http = require("http");
 
 const DEFAULTS = {
   version: 1,
@@ -145,10 +144,9 @@ class SettingsManager {
       const cfg = configs[provider];
       if (!cfg) return resolve({ ok: false, error: `Unknown provider: ${provider}` });
 
-      const client = cfg.host.includes("openai.com") || cfg.host.includes("openrouter") ? http : https;
-
+      // All providers use HTTPS — always use https module
       const options = { hostname: cfg.host, port: 443, path: cfg.path, method: cfg.method, headers: cfg.headers };
-      const req = client.request(options, (res) => {
+      const req = https.request(options, (res) => {
         let data = "";
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () => {

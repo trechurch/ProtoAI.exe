@@ -1,5 +1,7 @@
 // settings.js — Settings Dashboard + First-Run Wizard
 (function () {
+  "use strict";
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
@@ -12,14 +14,24 @@
   function qs(sel) { return document.querySelector(sel); }
   function qsa(sel) { return document.querySelectorAll(sel); }
 
+  // Unified backend caller — Tauri IPC primary, HTTP fallback
   async function callTauri(cmd, args) {
     if (TAURI_AVAILABLE) {
-      return window.__TAURI__.core.invoke(cmd, args);
+      try {
+        return await window.__TAURI__.core.invoke(cmd, args);
+      } catch (e) {
+        // Tauri available but failed — log and try HTTP fallback if applicable
+        if (cmd === "settings_first_run_status") {
+          return { firstRunCompleted: false }; // safe default: show wizard
+        }
+        throw e;
+      }
     }
-    // HTTP fallback
+    // HTTP fallback (server.js on localhost:17890)
     if (cmd === "settings_get") {
       const r = await fetch(`${HTTP_BASE}/settings`);
-      return (await r.json()).settings;
+      const data = await r.json();
+      return data?.settings || {};
     }
     if (cmd === "settings_set") {
       await fetch(`${HTTP_BASE}/settings`, {
@@ -27,7 +39,10 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "set", key: args.key, value: args.value }),
       });
-      return _pendingSettings;
+      // Return the full settings from server so caller sees updated state
+      const r = await fetch(`${HTTP_BASE}/settings`);
+      const data = await r.json();
+      return data?.settings || {};
     }
     if (cmd === "settings_test_key") {
       const r = await fetch(`${HTTP_BASE}/settings/test-key`, {
@@ -38,8 +53,9 @@
       return await r.json();
     }
     if (cmd === "settings_first_run_status") {
-      // fallback: assume first run
-      return { firstRunCompleted: false };
+      // If no Tauri and no HTTP fallback available, default to non-first-run
+      // (user launched via HTTP server, meaning they've run before)
+      return { firstRunCompleted: true };
     }
     return null;
   }
@@ -48,35 +64,53 @@
   // Load / Save
   // ---------------------------------------------------------------------------
   async function loadSettings() {
-    _settings = await callTauri("settings_get", {});
-    return _settings;
+    try {
+      _settings = await callTauri("settings_get", {});
+      return _settings;
+    } catch (e) {
+      console.error("[Settings] Failed to load settings:", e);
+      _settings = {};
+      return _settings;
+    }
   }
 
   async function saveSettings() {
-    _pendingSettings = readAllFromUI();
-    for (const key of Object.keys(_pendingSettings)) {
-      if (key === "version") continue;
-      await callTauri("settings_set", { key, value: _pendingSettings[key] });
+    try {
+      _pendingSettings = readAllFromUI();
+      for (const key of Object.keys(_pendingSettings)) {
+        if (key === "version") continue;
+        await callTauri("settings_set", { key, value: _pendingSettings[key] });
+      }
+      _settings = _pendingSettings;
+      _pendingSettings = null;
+      applySettingsToApp();
+      if (typeof showToast === "function") {
+        showToast("Settings saved");
+      }
+    } catch (e) {
+      console.error("[Settings] Failed to save:", e);
+      if (typeof showToast === "function") {
+        showToast("Failed to save settings: " + e.message);
+      }
     }
-    if (typeof showToast === "function") showToast("Settings saved");
-    _settings = _pendingSettings;
-    _pendingSettings = null;
-    applySettingsToApp();
   }
 
+  // ---------------------------------------------------------------------------
+  // Read all settings from UI elements
+  // ---------------------------------------------------------------------------
   function readAllFromUI() {
-    // API keys: read from settings panel first, fall back to wizard inputs
-    const apiKeyVal = (id) => qs("#" + id)?.value || qs("#wiz-" + id)?.value || "";
+    // API keys — prefer main settings panel values, fall back to wizard inputs
+    const keyVal = (id) => (qs("#" + id)?.value || "").trim() || (qs("#wiz-" + id)?.value || "").trim() || "";
     const apiKeys = {
-      anthropic: apiKeyVal("apiKey-anthropic"),
-      openai: apiKeyVal("apiKey-openai"),
-      openrouter: apiKeyVal("apiKey-openrouter"),
+      anthropic: keyVal("apiKey-anthropic"),
+      openai: keyVal("apiKey-openai"),
+      openrouter: keyVal("apiKey-openrouter"),
     };
     const models = {
       enabled: qsa(".model-cb:checked").map(cb => cb.value),
       defaults: {
-        default: qs("#defaultModelSelect")?.value || apiKeys.anthropic ? "anthropic/claude-3.5-sonnet" : "qwen/qwen3.6-plus:free",
-        coding: qs("#codingModelSelect")?.value || "",
+        default: qs("#defaultModelSelect")?.value || "qwen/qwen3.6-plus:free",
+        coding: qs("#codingModelSelect")?.value || "anthropic/claude-3.5-sonnet",
       },
     };
     const profiles = {
@@ -84,13 +118,13 @@
       fallbackProfile: qs("#fallbackProfile")?.value || "analysis",
     };
     const ingestion = {
-      maxDepth: parseInt(qs("#maxDepth")?.value || "4", 10),
-      maxFileSizeMB: parseInt(qs("#maxFileSizeMB")?.value || "10", 10),
+      maxDepth: Math.max(1, Math.min(10, parseInt(qs("#maxDepth")?.value || "4", 10) || 4)),
+      maxFileSizeMB: Math.max(1, Math.min(100, parseInt(qs("#maxFileSizeMB")?.value || "10", 10) || 10)),
       supportedExtensions: qsa(".ext-cb:checked").map(cb => cb.value),
     };
     const backend = {
-      timeoutMs: parseInt(qs("#timeoutMs")?.value || "30000", 10),
-      retryCount: parseInt(qs("#retryCount")?.value || "3", 10),
+      timeoutMs: Math.max(5000, Math.min(120000, parseInt(qs("#timeoutMs")?.value || "30000", 10) || 30000)),
+      retryCount: Math.max(0, Math.min(10, parseInt(qs("#retryCount")?.value || "3", 10) || 3)),
       fallbackBehavior: qs("#fallbackBehavior")?.value || "http",
     };
     const spellcheck = { enabled: !!(qs("#spellcheckEnabled")?.checked) };
@@ -102,12 +136,18 @@
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // Populate all UI elements from a settings object
+  // ---------------------------------------------------------------------------
   function populateUI(s) {
     if (!s) return;
-    // API Keys
-    if (qs("#apiKey-anthropic")) qs("#apiKey-anthropic").value = (s.apiKeys?.anthropic) || "";
-    if (qs("#apiKey-openai")) qs("#apiKey-openai").value = (s.apiKeys?.openai) || "";
-    if (qs("#apiKey-openrouter")) qs("#apiKey-openrouter").value = (s.apiKeys?.openrouter) || "";
+    // API Keys — both main panel and wizard inputs
+    if (qs("#apiKey-anthropic")) qs("#apiKey-anthropic").value = s.apiKeys?.anthropic || "";
+    if (qs("#apiKey-openai")) qs("#apiKey-openai").value = s.apiKeys?.openai || "";
+    if (qs("#apiKey-openrouter")) qs("#apiKey-openrouter").value = s.apiKeys?.openrouter || "";
+    if (qs("#wiz-apiKey-anthropic")) qs("#wiz-apiKey-anthropic").value = s.apiKeys?.anthropic || "";
+    if (qs("#wiz-apiKey-openai")) qs("#wiz-apiKey-openai").value = s.apiKeys?.openai || "";
+    if (qs("#wiz-apiKey-openrouter")) qs("#wiz-apiKey-openrouter").value = s.apiKeys?.openrouter || "";
 
     // Models
     const enabled = new Set((s.models?.enabled) || []);
@@ -137,12 +177,12 @@
     }
 
     // Profiles
-    if (qs("#defaultProfile")) qs("#defaultProfile").value = (s.profiles?.defaultProfile) || "default";
-    if (qs("#fallbackProfile")) qs("#fallbackProfile").value = (s.profiles?.fallbackProfile) || "analysis";
+    if (qs("#defaultProfile")) qs("#defaultProfile").value = s.profiles?.defaultProfile || "default";
+    if (qs("#fallbackProfile")) qs("#fallbackProfile").value = s.profiles?.fallbackProfile || "analysis";
 
     // Ingestion
-    if (qs("#maxDepth")) qs("#maxDepth").value = (s.ingestion?.maxDepth) || 4;
-    if (qs("#maxFileSizeMB")) qs("#maxFileSizeMB").value = (s.ingestion?.maxFileSizeMB) || 10;
+    if (qs("#maxDepth")) qs("#maxDepth").value = s.ingestion?.maxDepth || 4;
+    if (qs("#maxFileSizeMB")) qs("#maxFileSizeMB").value = s.ingestion?.maxFileSizeMB || 10;
     const exts = [".js", ".ts", ".py", ".rs", ".go", ".java", ".md", ".txt", ".json", ".html", ".css", ".xml", ".yaml", ".yml", ".sh", ".bat"];
     const extDiv = qs("#extensionCheckboxes");
     if (extDiv) {
@@ -158,9 +198,9 @@
     }
 
     // Backend
-    if (qs("#timeoutMs")) qs("#timeoutMs").value = (s.backend?.timeoutMs) || 30000;
-    if (qs("#retryCount")) qs("#retryCount").value = (s.backend?.retryCount) || 3;
-    if (qs("#fallbackBehavior")) qs("#fallbackBehavior").value = (s.backend?.fallbackBehavior) || "http";
+    if (qs("#timeoutMs")) qs("#timeoutMs").value = s.backend?.timeoutMs || 30000;
+    if (qs("#retryCount")) qs("#retryCount").value = s.backend?.retryCount || 3;
+    if (qs("#fallbackBehavior")) qs("#fallbackBehavior").value = s.backend?.fallbackBehavior || "http";
 
     // Spellcheck
     if (qs("#spellcheckEnabled")) qs("#spellcheckEnabled").checked = !!(s.spellcheck?.enabled);
@@ -169,18 +209,21 @@
     if (qs("#debugLogging")) qs("#debugLogging").checked = !!(s.advanced?.debugLogging);
   }
 
+  // ---------------------------------------------------------------------------
+  // Apply settings to main app (model selects)
+  // ---------------------------------------------------------------------------
   function applySettingsToApp() {
-    // Replace model selects in main UI
-    const allSelects = [qs("#engineSelect")];
-    const sideSelect = qs("#otfmsEngineSelect");
-    if (sideSelect) allSelects.push(sideSelect);
+    const allSelects = [];
+    const main = qs("#engineSelect");
+    if (main) allSelects.push(main);
+    const side = qs("#otfmsEngineSelect");
+    if (side) allSelects.push(side);
 
     const enabled = new Set((_settings?.models?.enabled) || []);
     const fallbacks = ["anthropic/claude-3.5-sonnet", "anthropic/claude-opus-4.1", "openai/gpt-4o-mini", "qwen/qwen3.6-plus:free"];
     const models = enabled.size > 0 ? [...enabled] : fallbacks;
 
     allSelects.forEach(sel => {
-      if (!sel) return;
       const cur = sel.value;
       sel.innerHTML = models.map(m =>
         `<option value="${m}" ${m === cur ? "selected" : ""}>${m}</option>`
@@ -192,11 +235,15 @@
   // Test API Key
   // ---------------------------------------------------------------------------
   async function testApiKey(provider, btn) {
-    const input = qs(`#apiKey-${provider}`);
+    if (!provider || !btn) return;
+    // Read from main panel if exists, fall back to wizard input
+    const input = qs(`#apiKey-${provider}`) || qs(`#wiz-apiKey-${provider}`);
     if (!input) return;
-    const key = input.value.trim();
+    const key = (input.value || "").trim();
     if (!key) {
-      if (input.nextElementSibling) input.nextElementSibling.textContent = "(empty)";
+      const origText = btn.textContent;
+      btn.textContent = "empty";
+      setTimeout(() => { btn.textContent = origText; }, 1500);
       return;
     }
     const originalText = btn.textContent;
@@ -204,17 +251,18 @@
     btn.disabled = true;
     try {
       const result = await callTauri("settings_test_key", { provider, key });
-      if (result.ok) {
+      if (result && result.ok) {
         btn.textContent = "OK";
         btn.style.color = "#4ade80";
       } else {
         btn.textContent = "Fail";
         btn.style.color = "#f87171";
-        btn.title = result.error || "";
+        btn.title = result?.error || "Validation failed";
       }
     } catch (e) {
       btn.textContent = "Err";
       btn.style.color = "#fbbf24";
+      btn.title = String(e);
     }
     setTimeout(() => {
       btn.textContent = originalText;
@@ -235,7 +283,7 @@
       _settings = s;
       populateUI(s);
       applySettingsToApp();
-    });
+    }).catch(e => console.error("[Settings] open panel error:", e));
   }
 
   function closeSettingsPanel() {
@@ -258,7 +306,10 @@
     _wizardStep = 1;
     overlay.classList.remove("hidden");
     updateWizardStep();
-    loadSettings().then(s => { _settings = s; populateUI(s); });
+    loadSettings().catch(() => { _settings = {}; }).then(s => {
+      _settings = s || {};
+      populateUI(s || _settings);
+    });
   }
 
   function closeFirstRunWizard() {
@@ -270,11 +321,9 @@
     qsa(".wizard-step").forEach(el => el.classList.remove("active"));
     const step = qs(`#wizardStep${_wizardStep}`);
     if (step) step.classList.add("active");
-    // Update dots
     qsa(".wizard-dot").forEach((d, i) => {
       d.classList.toggle("active", i === _wizardStep - 1);
     });
-    // Button state
     const backBtn = qs("#wizardBackBtn");
     if (backBtn) backBtn.style.visibility = _wizardStep === 1 ? "hidden" : "visible";
     const nextBtn = qs("#wizardNextBtn");
@@ -298,17 +347,25 @@
   }
 
   async function completeWizard() {
-    // Save settings
-    _pendingSettings = readAllFromUI();
-    _pendingSettings.firstRunCompleted = true;
-    for (const key of Object.keys(_pendingSettings)) {
-      if (key === "version") continue;
-      await callTauri("settings_set", { key, value: _pendingSettings[key] });
+    try {
+      _pendingSettings = readAllFromUI();
+      _pendingSettings.firstRunCompleted = true;
+      for (const key of Object.keys(_pendingSettings)) {
+        if (key === "version") continue;
+        await callTauri("settings_set", { key, value: _pendingSettings[key] });
+      }
+      _settings = _pendingSettings;
+      _pendingSettings = null;
+      applySettingsToApp();
+    } catch (e) {
+      console.error("[Settings] Wizard save error:", e);
+      // Still proceed — user experience isn't ruined by a failed save
     }
-    _settings = _pendingSettings;
-    _pendingSettings = null;
-    applySettingsToApp();
     closeFirstRunWizard();
+    // Now load the main app
+    if (typeof init === "function") {
+      try { init(); } catch (_) {}
+    }
   }
 
   window.openFirstRunWizard = openFirstRunWizard;
@@ -319,7 +376,7 @@
   window.saveSettings = saveSettings;
 
   // ---------------------------------------------------------------------------
-  // DOM init on load
+  // DOM init — register all event handlers
   // ---------------------------------------------------------------------------
   function setupSettingsPanel() {
     // Nav tabs
@@ -334,7 +391,7 @@
       });
     });
 
-    // Close button
+    // Settings header close
     const closeBtn = qs("#settingsCloseBtn");
     if (closeBtn) closeBtn.addEventListener("click", closeSettingsPanel);
 
@@ -344,7 +401,7 @@
     const cancelBtn = qs("#settingsCancelBtn");
     if (cancelBtn) cancelBtn.addEventListener("click", closeSettingsPanel);
 
-    // Wizard buttons
+    // Wizard navigation
     const nextBtn = qs("#wizardNextBtn");
     if (nextBtn) nextBtn.addEventListener("click", wizardNext);
     const backBtn = qs("#wizardBackBtn");
@@ -352,57 +409,85 @@
     const skipBtn = qs("#wizardSkipBtn");
     if (skipBtn) skipBtn.addEventListener("click", completeWizard);
 
-    // Test key buttons
+    // Test key buttons — register on ALL matching elements (main panel + wizard)
     qsa(".test-key-btn").forEach(btn => {
-      btn.addEventListener("click", () => testApiKey(btn.dataset.provider, btn));
+      const provider = btn.dataset.provider;
+      if (provider) {
+        btn.addEventListener("click", () => testApiKey(provider, btn));
+      }
     });
 
-    // Export / Import
+    // Export settings
     const exportBtn = qs("#exportSettingsBtn");
     if (exportBtn) exportBtn.addEventListener("click", () => {
-      const blob = new Blob([JSON.stringify(_settings, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "protoai-settings.json";
-      a.click();
-      URL.revokeObjectURL(a.href);
+      if (!_settings || Object.keys(_settings).length === 0) {
+        loadSettings().then(s => {
+          _settings = s;
+          doExportSettings();
+        });
+        return;
+      }
+      doExportSettings();
     });
+
+    // Import settings
     const importBtn = qs("#importSettingsBtn");
-    if (importBtn) {
-      importBtn.addEventListener("click", () => {
-        const input = document.createElement("input");
-        input.type = "file";
-        input.accept = ".json";
-        input.onchange = () => {
-          const f = input.files[0];
-          if (!f) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            try {
-              const obj = JSON.parse(reader.result);
-              _settings = obj;
-              populateUI(obj);
-              if (typeof showToast === "function") showToast("Settings imported");
-            } catch (e) {
-              if (typeof showToast === "function") showToast("Invalid JSON file");
+    if (importBtn) importBtn.addEventListener("click", () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".json";
+      input.onchange = () => {
+        const f = input.files[0];
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const obj = JSON.parse(reader.result);
+            _settings = obj;
+            populateUI(obj);
+            applySettingsToApp();
+            // Also save imported settings to backend
+            for (const key of Object.keys(obj)) {
+              if (key === "version") continue;
+              callTauri("settings_set", { key, value: obj[key] }).catch(() => {});
             }
-          };
-          reader.readAsText(f);
+            if (typeof showToast === "function") showToast("Settings imported and saved");
+          } catch (e) {
+            if (typeof showToast === "function") showToast("Invalid JSON file");
+          }
         };
-        input.click();
+        reader.readAsText(f);
+      };
+      input.click();
+    });
+
+    // Click outside panel to close (but not clicks on the panel itself)
+    const overlay = qs("#settingsOverlay");
+    if (overlay) {
+      overlay.addEventListener("click", e => {
+        if (e.target === overlay) closeSettingsPanel();
       });
     }
-
-    // Auto-save on change for settings values (debounced)
-    let saveTimer;
-    ["apiKey-anthropic", "apiKey-openai", "apiKey-openrouter", "maxDepth", "maxFileSizeMB", "timeoutMs", "retryCount"].forEach(id => {
-      const el = qs("#" + id);
-      if (!el) return;
-      el.addEventListener("input", () => {
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => {}, 1000); // visual debounce only; actual save on button click
+    const wizOverlay = qs("#wizardOverlay");
+    if (wizOverlay) {
+      wizOverlay.addEventListener("click", e => {
+        // Don't allow closing wizard by clicking outside — force navigation
       });
-    });
+    }
+  }
+
+  function doExportSettings() {
+    if (!_settings || Object.keys(_settings).length === 0) return;
+    const safeSettings = JSON.parse(JSON.stringify(_settings));
+    delete safeSettings.version; // internal field
+    const blob = new Blob([JSON.stringify(safeSettings, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "protoai-settings.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
   }
 
   // Register when DOM ready

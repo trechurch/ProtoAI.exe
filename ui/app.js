@@ -466,7 +466,7 @@ async function init() {
   // Global keyboard shortcuts
   document.addEventListener("keydown", e => {
     if (e.key === "?" && e.shiftKey)              { showShortcutOverlay(); return; }
-    if (e.key === "Escape")                        { hideShortcutOverlay(); hideCommandPalette(); window.closeSettingsPanel?.(); return; }
+    if (e.key === "Escape")                        { hideShortcutOverlay(); hideCommandPalette(); window.closeSettingsPanel?.(); window.closeFirstRunWizard?.(); return; }
     if (e.ctrlKey && e.key === "Enter")            { e.preventDefault(); sendMessageFromUI(); }
     if (e.ctrlKey && e.key === "k")               { e.preventDefault(); toggleCommandPalette(); }
     if (e.ctrlKey && e.key === "/")                { e.preventDefault(); cycleSplitMode(); }
@@ -1999,30 +1999,29 @@ window.addEventListener("DOMContentLoaded", async () => {
   // First-run detection — check settings, show wizard if needed
   try {
     let firstRun = true;
-    for (let attempt = 0; attempt < 6; attempt++) {
+    let resolved = false;
+    for (let attempt = 0; attempt < 6 && !resolved; attempt++) {
       if (typeof window.__TAURI__?.core?.invoke === "function") {
         try {
           const status = await window.__TAURI__.core.invoke("settings_first_run_status", {});
-
-          firstRun = !!status.firstRunCompleted === false;
+          firstRun = status?.firstRunCompleted !== true;
+          resolved = true;
           break;
         } catch (_) {}
       }
       // HTTP fallback
-      if (attempt > 0) {
-        try {
-          const r = await fetch("http://127.0.0.1:17890/settings");
-
+      try {
+        const r = await fetch(`${HTTP_BASE}/settings`);
+        if (r.ok) {
           const data = await r.json();
-
-          firstRun = !data?.settings?.firstRunCompleted;
-          break;
-        } catch (_) {}
+          firstRun = data?.settings?.firstRunCompleted !== true;
+          resolved = true;
+        }
+      } catch (_) {}
+      // Sidecar may still be starting — wait before retry
+      if (!resolved) {
+        await new Promise(res => setTimeout(res, 800));
       }
-      await new Promise(res => setTimeout(res, 800));
-    }
-    if (!firstRun === false) {
-      // firstRun is false (meaning firstRunCompleted is true) — proceed normally
     }
     if (firstRun) {
       window.openFirstRunWizard?.();

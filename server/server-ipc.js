@@ -245,20 +245,25 @@ async function handleDeepSearchIPC(payload) {
 // settings: get all, set key, test key
 async function handleSettingsIPC(payload) {
   const { action, key, value, provider } = payload || {};
-  if (action === "get") return { settings: settingsManager.exportAll() };
-  if (action === "set") {
-    if (key && value !== undefined) {
-      settingsManager.set(key, value);
-    } else if (value !== undefined) {
-      settingsManager.importAll(value);
+  try {
+    if (action === "get") return { settings: settingsManager.exportAll() };
+    if (action === "set") {
+      if (key && value !== undefined) {
+        settingsManager.set(key, value);
+      } else if (value !== undefined) {
+        settingsManager.importAll(value);
+      }
+      return { settings: settingsManager.exportAll() };
     }
-    return { settings: settingsManager.exportAll() };
+    if (action === "testKey") {
+      const result = await settingsManager.validateApiKey(provider, value);
+      return result;
+    }
+    return { ok: false, error: "Unknown settings action" };
+  } catch (err) {
+    log("❌ Settings handler error:", err.message);
+    return { ok: false, error: "Settings operation failed", detail: err.message };
   }
-  if (action === "testKey") {
-    const result = await settingsManager.validateApiKey(provider, value);
-    return result;
-  }
-  return { ok: false, error: "Unknown settings action" };
 }
 
 // -----------------------------------------------------------------------------

@@ -53,9 +53,14 @@
       </div>
     `;
     div.querySelector(".dismiss").onclick = () => div.remove();
-    // Insert at top of chat
-    const container = document.getElementById("chatContainer");
-    container.insertBefore(div, container.firstChild);
+    // Insert at top of chat, or fall back to main area
+    const container = document.getElementById("chatContainer") || document.getElementById("main");
+    if (!container) return;
+    if (container.firstChild) {
+      container.insertBefore(div, container.firstChild);
+    } else {
+      container.appendChild(div);
+    }
   }
 
   // Auto-check on load

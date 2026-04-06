@@ -247,8 +247,12 @@ function handleTestKey(req, res) {
         let parsed;
         try { parsed = JSON.parse(body); } catch { return sendJSON(res, { error: "Invalid JSON" }); }
         const { provider, key } = parsed;
-        const result = await settingsManager.validateApiKey(provider, key);
-        sendJSON(res, result);
+        try {
+            const result = await settingsManager.validateApiKey(provider, key);
+            sendJSON(res, result);
+        } catch (err) {
+            sendJSON(res, { ok: false, error: "Validation request failed", detail: err.message });
+        }
     });
 }
 
