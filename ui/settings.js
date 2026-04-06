@@ -17,17 +17,9 @@
   // Unified backend caller — Tauri IPC primary, HTTP fallback
   async function callTauri(cmd, args) {
     if (TAURI_AVAILABLE) {
-      try {
-        return await window.__TAURI__.core.invoke(cmd, args);
-      } catch (e) {
-        // Tauri available but failed — log and try HTTP fallback if applicable
-        if (cmd === "settings_first_run_status") {
-          return { firstRunCompleted: false }; // safe default: show wizard
-        }
-        throw e;
-      }
+      return await window.__TAURI__.core.invoke(cmd, args);
     }
-    // HTTP fallback (server.js on localhost:17890)
+    // HTTP fallback (dev mode — server.js on localhost:17890)
     if (cmd === "settings_get") {
       const r = await fetch(`${HTTP_BASE}/settings`);
       const data = await r.json();
@@ -232,20 +224,16 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Test API Key — direct HTTPS check, no bridge needed
+  // Test API Key — tries Tauri IPC, falls back to HTTP
   // ---------------------------------------------------------------------------
   async function testApiKey(provider, btn) {
     if (!provider || !btn) return;
-
-    // Prevent double-firing — guard with a flag on the button
     if (btn._testing) return;
     btn._testing = true;
 
-    // Read from main panel first, fall back to wizard input
     const input = qs(`#apiKey-${provider}`) || qs(`#wiz-apiKey-${provider}`);
     if (!input) { btn._testing = false; return; }
     const key = (input.value || "").trim();
-
     const originalText = btn.textContent;
 
     if (!key) {
@@ -258,40 +246,38 @@
     btn.textContent = "...";
     btn.disabled = true;
 
-    try {
-      // Direct HTTPS validation — does NOT need the Rust bridge
-      const result = await fetch(`http://127.0.0.1:17890/settings/test-key`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, key }),
-      });
-      const data = await result.json();
+    let result = null;
 
-      if (data.ok) {
-        btn.textContent = "OK";
-        btn.style.color = "#4ade80";
-      } else {
-        btn.textContent = "Fail";
-        btn.style.color = "#f87171";
-        btn.title = data?.error || "Validation failed";
-      }
-    } catch (e) {
-      // HTTP server not available — try through Tauri as fallback
+    // Primary: Tauri IPC
+    if (TAURI_AVAILABLE) {
       try {
-        const data = await window.__TAURI__?.core.invoke("settings_test_key", { provider, key }) ?? { ok: false, error: "Tauri not available" };
-        if (data.ok) {
-          btn.textContent = "OK";
-          btn.style.color = "#4ade80";
-        } else {
-          btn.textContent = "Fail";
-          btn.style.color = "#f87171";
-          btn.title = data.error || "Validation failed";
-        }
-      } catch (e2) {
-        btn.textContent = "Err";
-        btn.style.color = "#fbbf24";
-        btn.title = String(e2);
-      }
+        result = await window.__TAURI__.core.invoke("settings_test_key", { provider, key });
+      } catch (_) { result = null; }
+    }
+
+    // Fallback: HTTP server (dev mode)
+    if (!result) {
+      try {
+        const r = await fetch(`${HTTP_BASE}/settings/test-key`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, key }),
+        });
+        result = await r.json();
+      } catch (_) { result = null; }
+    }
+
+    if (result && result.ok) {
+      btn.textContent = "OK";
+      btn.style.color = "#4ade80";
+    } else if (result) {
+      btn.textContent = "Fail";
+      btn.style.color = "#f87171";
+      btn.title = result.error || "Validation failed";
+    } else {
+      btn.textContent = "Err";
+      btn.style.color = "#fbbf24";
+      btn.title = "Could not reach backend. If sidecar is still starting, wait a moment and try again.";
     }
 
     setTimeout(() => {
@@ -381,43 +367,26 @@
     _pendingSettings = readAllFromUI();
     _pendingSettings.firstRunCompleted = true;
 
+    // Retry saving settings until the Tauri bridge is ready (max 30s)
     let saved = false;
-    try {
-      // Try via Tauri IPC first (sidecar may not be ready yet)
-      for (const key of Object.keys(_pendingSettings)) {
-        if (key === "version") continue;
-        try {
-          await callTauri("settings_set", { key, value: _pendingSettings[key] });
-        } catch (_) {
-          // Bridge not ready — write settings.json directly via HTTP
-          const r = await fetch(`${HTTP_BASE}/settings`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "set", key, value: _pendingSettings[key] }),
-          });
-        }
-      }
-      saved = true;
-    } catch (e) {
-      // Last resort: write settings.json directly via a hidden form post
-      // This ensures first-run is marked complete even if everything fails
+    for (let attempt = 0; attempt < 30; attempt++) {
       try {
-        const response = await fetch(`${HTTP_BASE}/settings`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "set",
-            value: _pendingSettings,
-          }),
-        });
-        saved = response.ok;
-      } catch (_) {}
+        for (const key of Object.keys(_pendingSettings)) {
+          if (key === "version") continue;
+          try {
+            await window.__TAURI__.core.invoke("settings_set", { key, value: _pendingSettings[key] });
+          } catch (_) {}
+        }
+        saved = true;
+        break;
+      } catch (_) {
+        await new Promise(res => setTimeout(res, 1000));
+      }
     }
 
-    _settings = _pendingSettings;
-    _pendingSettings = null;
-
     if (saved) {
+      _settings = _pendingSettings;
+      _pendingSettings = null;
       applySettingsToApp();
     }
 
