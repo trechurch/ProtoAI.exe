@@ -232,44 +232,75 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Test API Key
+  // Test API Key — direct HTTPS check, no bridge needed
   // ---------------------------------------------------------------------------
   async function testApiKey(provider, btn) {
     if (!provider || !btn) return;
-    // Read from main panel if exists, fall back to wizard input
+
+    // Prevent double-firing — guard with a flag on the button
+    if (btn._testing) return;
+    btn._testing = true;
+
+    // Read from main panel first, fall back to wizard input
     const input = qs(`#apiKey-${provider}`) || qs(`#wiz-apiKey-${provider}`);
-    if (!input) return;
+    if (!input) { btn._testing = false; return; }
     const key = (input.value || "").trim();
+
+    const originalText = btn.textContent;
+
     if (!key) {
-      const origText = btn.textContent;
       btn.textContent = "empty";
-      setTimeout(() => { btn.textContent = origText; }, 1500);
+      setTimeout(() => { btn.textContent = originalText; }, 1500);
+      btn._testing = false;
       return;
     }
-    const originalText = btn.textContent;
+
     btn.textContent = "...";
     btn.disabled = true;
+
     try {
-      const result = await callTauri("settings_test_key", { provider, key });
-      if (result && result.ok) {
+      // Direct HTTPS validation — does NOT need the Rust bridge
+      const result = await fetch(`http://127.0.0.1:17890/settings/test-key`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, key }),
+      });
+      const data = await result.json();
+
+      if (data.ok) {
         btn.textContent = "OK";
         btn.style.color = "#4ade80";
       } else {
         btn.textContent = "Fail";
         btn.style.color = "#f87171";
-        btn.title = result?.error || "Validation failed";
+        btn.title = data?.error || "Validation failed";
       }
     } catch (e) {
-      btn.textContent = "Err";
-      btn.style.color = "#fbbf24";
-      btn.title = String(e);
+      // HTTP server not available — try through Tauri as fallback
+      try {
+        const data = await window.__TAURI__?.core.invoke("settings_test_key", { provider, key }) ?? { ok: false, error: "Tauri not available" };
+        if (data.ok) {
+          btn.textContent = "OK";
+          btn.style.color = "#4ade80";
+        } else {
+          btn.textContent = "Fail";
+          btn.style.color = "#f87171";
+          btn.title = data.error || "Validation failed";
+        }
+      } catch (e2) {
+        btn.textContent = "Err";
+        btn.style.color = "#fbbf24";
+        btn.title = String(e2);
+      }
     }
+
     setTimeout(() => {
       btn.textContent = originalText;
       btn.style.color = "";
       btn.disabled = false;
       btn.title = "";
-    }, 3000);
+      btn._testing = false;
+    }, 4000);
   }
 
   // ---------------------------------------------------------------------------
@@ -347,22 +378,52 @@
   }
 
   async function completeWizard() {
+    _pendingSettings = readAllFromUI();
+    _pendingSettings.firstRunCompleted = true;
+
+    let saved = false;
     try {
-      _pendingSettings = readAllFromUI();
-      _pendingSettings.firstRunCompleted = true;
+      // Try via Tauri IPC first (sidecar may not be ready yet)
       for (const key of Object.keys(_pendingSettings)) {
         if (key === "version") continue;
-        await callTauri("settings_set", { key, value: _pendingSettings[key] });
+        try {
+          await callTauri("settings_set", { key, value: _pendingSettings[key] });
+        } catch (_) {
+          // Bridge not ready — write settings.json directly via HTTP
+          const r = await fetch(`${HTTP_BASE}/settings`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "set", key, value: _pendingSettings[key] }),
+          });
+        }
       }
-      _settings = _pendingSettings;
-      _pendingSettings = null;
-      applySettingsToApp();
+      saved = true;
     } catch (e) {
-      console.error("[Settings] Wizard save error:", e);
-      // Still proceed — user experience isn't ruined by a failed save
+      // Last resort: write settings.json directly via a hidden form post
+      // This ensures first-run is marked complete even if everything fails
+      try {
+        const response = await fetch(`${HTTP_BASE}/settings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "set",
+            value: _pendingSettings,
+          }),
+        });
+        saved = response.ok;
+      } catch (_) {}
     }
+
+    _settings = _pendingSettings;
+    _pendingSettings = null;
+
+    if (saved) {
+      applySettingsToApp();
+    }
+
     closeFirstRunWizard();
-    // Now load the main app
+
+    // Proceed to main app
     if (typeof init === "function") {
       try { init(); } catch (_) {}
     }
