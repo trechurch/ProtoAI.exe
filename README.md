@@ -55,6 +55,10 @@ cargo tauri build
 
 This project follows the Self-Describing Object Architecture (SDOA) v1.2 pattern, where every module declares its own MANIFEST and DOCS directly in the source code.
 
+## Privacy
+
+See [PRIVACY.md](PRIVACY.md) for details on how ProtoAI handles your data, API keys, and messages.
+
 ## License
 
 MIT
