@@ -44,13 +44,32 @@ const p = profiles[profile];
 // -------------------------------
 // LOAD API KEY
 // -------------------------------
-const keyFile = paths.secretKey();
-if (!fs.existsSync(keyFile)) {
-    console.error("Missing decrypted key file.");
+// Prefer SettingsManager (user-configured), fall back to secret.key
+let apiKey = "";
+const settingsPath = paths.data("settings.json");
+if (fs.existsSync(settingsPath)) {
+    try {
+        const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+        if (settings?.apiKeys?.openrouter) {
+            apiKey = settings.apiKeys.openrouter.trim();
+        }
+        // Also try anthropic key as fallback (for direct Anthropic API calls)
+        if (!apiKey && settings?.apiKeys?.anthropic) {
+            apiKey = settings.apiKeys.anthropic.trim();
+        }
+    } catch (_) {}
+}
+// Fall back to secret.key if settings didn't provide a key
+if (!apiKey) {
+    const keyFile = paths.secretKey();
+    if (fs.existsSync(keyFile)) {
+        apiKey = fs.readFileSync(keyFile, "utf8").trim();
+    }
+}
+if (!apiKey) {
+    console.error("No API key configured. Set your OpenRouter or Anthropic key in Settings (Ctrl+Shift+S), or create data/secret.key");
     process.exit(1);
 }
-
-const apiKey = fs.readFileSync(keyFile, "utf8").trim();
 
 // -------------------------------
 // LOAD MEMORY
