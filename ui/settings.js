@@ -200,33 +200,56 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Test API Key — tries Tauri IPC, falls back to HTTP
+  // ---------------------------------------------------------------------------
+  // Test API Key — local format check, then tries Tauri IPC if available
   // ---------------------------------------------------------------------------
   async function testApiKey(provider, btn) {
     if (!provider || !btn) return;
     if (btn._testing) return;
     btn._testing = true;
 
-    const input = qs(`#apiKey-${provider}`) || qs(`#wiz-apiKey-${provider}`);
+    const input = qs(`#wiz-apiKey-${provider}`) || qs(`#apiKey-${provider}`);
     if (!input) { btn._testing = false; return; }
     const key = (input.value || "").trim();
     const originalText = btn.textContent;
 
     if (!key) {
       btn.textContent = "empty";
-      setTimeout(() => { btn.textContent = originalText; }, 1500);
-      btn._testing = false;
+      btn.style.color = "#fbbf24";
+      setTimeout(() => { btn.textContent = originalText; btn.style.color = ""; btn._testing = false; }, 1500);
       return;
     }
 
+    // Local key format validation — instant feedback without sidecar
+    const keyPrefixes = {
+      anthropic: ["sk-ant-"],
+      openai: ["sk-"],
+      openrouter: ["sk-or-"],
+    };
+    const prefixes = keyPrefixes[provider] || [];
+    if (prefixes.length > 0 && !prefixes.some(p => key.startsWith(p))) {
+      btn.textContent = "format?";
+      btn.style.color = "#fbbf24";
+      btn.title = `Key doesn't look like a ${provider} key. Should start with ${prefixes.join(" or ")}`;
+      setTimeout(() => { btn.textContent = originalText; btn.style.color = ""; btn.title = ""; btn._testing = false; }, 3000);
+      return;
+    }
+
+    // Full validation via sidecar
     btn.textContent = "...";
     btn.disabled = true;
 
     let result = null;
-
     try {
       result = await window.__TAURI__.core.invoke("settings_test_key", { provider, key });
-    } catch (_) { result = null; }
+    } catch (e) {
+      // Sidecar not ready yet
+      btn.textContent = "waiting";
+      btn.style.color = "#fbbf24";
+      btn.title = "Sidecar still starting up — try again in a moment.";
+      setTimeout(() => { btn.textContent = originalText; btn.style.color = ""; btn.disabled = false; btn.title = ""; btn._testing = false; }, 3000);
+      return;
+    }
 
     if (result && result.ok) {
       btn.textContent = "OK";
@@ -238,7 +261,7 @@
     } else {
       btn.textContent = "Err";
       btn.style.color = "#fbbf24";
-      btn.title = "Could not reach backend. If sidecar is still starting, wait a moment and try again.";
+      btn.title = "Could not reach backend";
     }
 
     setTimeout(() => {
