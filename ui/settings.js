@@ -13,6 +13,8 @@
   // ---------------------------------------------------------------------------
   function qs(sel) { return document.querySelector(sel); }
   function qsa(sel) { return document.querySelectorAll(sel); }
+  function wizInput(id) { return qs(`#wiz-${id}`); }
+  function mainInput(id) { return qs(`#${id}`); }
 
   // Unified backend caller — Tauri IPC only
   async function callTauri(cmd, args) {
@@ -70,39 +72,41 @@
   // Read all settings from UI elements
   // ---------------------------------------------------------------------------
   function readAllFromUI() {
-    // API keys — prefer main settings panel values, fall back to wizard inputs
-    const keyVal = (id) => (qs("#" + id)?.value || "").trim() || (qs("#wiz-" + id)?.value || "").trim() || "";
-    const apiKeys = {
-      anthropic: keyVal("apiKey-anthropic"),
-      openai: keyVal("apiKey-openai"),
-      openrouter: keyVal("apiKey-openrouter"),
-    };
-    const models = {
-      enabled: qsa(".model-cb:checked").map(cb => cb.value),
-      defaults: {
-        default: qs("#defaultModelSelect")?.value || "qwen/qwen3.6-plus:free",
-        coding: qs("#codingModelSelect")?.value || "anthropic/claude-3.5-sonnet",
-      },
-      failoverList: qsa(".failover-cb:checked").map(cb => cb.value),
-    };
-    const profiles = {
-      defaultProfile: qs("#defaultProfile")?.value || "default",
-      fallbackProfile: qs("#fallbackProfile")?.value || "analysis",
-    };
-    const ingestion = {
-      maxDepth: Math.max(1, Math.min(10, parseInt(qs("#maxDepth")?.value || "4", 10) || 4)),
-      maxFileSizeMB: Math.max(1, Math.min(100, parseInt(qs("#maxFileSizeMB")?.value || "10", 10) || 10)),
-      supportedExtensions: qsa(".ext-cb:checked").map(cb => cb.value),
-    };
-    const backend = {
-      timeoutMs: Math.max(5000, Math.min(120000, parseInt(qs("#timeoutMs")?.value || "30000", 10) || 30000)),
-      retryCount: Math.max(0, Math.min(10, parseInt(qs("#retryCount")?.value || "3", 10) || 3)),
-    };
-    const spellcheck = { enabled: !!(qs("#spellcheckEnabled")?.checked) };
-    const advanced = { debugLogging: !!(qs("#debugLogging")?.checked) };
+    // API keys — read from wizard input during wizard, main panel during settings
+    const getWizKey = (id) => (wizInput(id)?.value || "").trim();
+    const getMainKey = (id) => (mainInput(id)?.value || "").trim();
+
+    // Prefer wizard input values if the wizard overlay is visible
     return {
       version: 1,
-      apiKeys, models, profiles, ingestion, backend, spellcheck, advanced,
+      apiKeys: {
+        anthropic: getWizKey("apiKey-anthropic") || getMainKey("apiKey-anthropic"),
+        openai: getWizKey("apiKey-openai") || getMainKey("apiKey-openai"),
+        openrouter: getWizKey("apiKey-openrouter") || getMainKey("apiKey-openrouter"),
+      },
+      models: {
+        enabled: qsa(".model-cb:checked").map(cb => cb.value),
+        defaults: {
+          default: qs("#defaultModelSelect")?.value || "qwen/qwen3.6-plus:free",
+          coding: qs("#codingModelSelect")?.value || "anthropic/claude-3.5-sonnet",
+        },
+        failoverList: qsa(".failover-cb:checked").map(cb => cb.value),
+      },
+      profiles: {
+        defaultProfile: qs("#defaultProfile")?.value || "default",
+        fallbackProfile: qs("#fallbackProfile")?.value || "analysis",
+      },
+      ingestion: {
+        maxDepth: Math.max(1, Math.min(10, parseInt(qs("#maxDepth")?.value || "4", 10) || 4)),
+        maxFileSizeMB: Math.max(1, Math.min(100, parseInt(qs("#maxFileSizeMB")?.value || "10", 10) || 10)),
+        supportedExtensions: qsa(".ext-cb:checked").map(cb => cb.value),
+      },
+      backend: {
+        timeoutMs: Math.max(5000, Math.min(120000, parseInt(qs("#timeoutMs")?.value || "30000", 10) || 30000)),
+        retryCount: Math.max(0, Math.min(10, parseInt(qs("#retryCount")?.value || "3", 10) || 3)),
+      },
+      spellcheck: { enabled: !!(qs("#spellcheckEnabled")?.checked) },
+      advanced: { debugLogging: !!(qs("#debugLogging")?.checked) },
       firstRunCompleted: _settings?.firstRunCompleted ?? true,
     };
   }
@@ -112,13 +116,14 @@
   // ---------------------------------------------------------------------------
   function populateUI(s) {
     if (!s) return;
-    // API Keys — both main panel and wizard inputs
-    if (qs("#apiKey-anthropic")) qs("#apiKey-anthropic").value = s.apiKeys?.anthropic || "";
-    if (qs("#apiKey-openai")) qs("#apiKey-openai").value = s.apiKeys?.openai || "";
-    if (qs("#apiKey-openrouter")) qs("#apiKey-openrouter").value = s.apiKeys?.openrouter || "";
-    if (qs("#wiz-apiKey-anthropic")) qs("#wiz-apiKey-anthropic").value = s.apiKeys?.anthropic || "";
-    if (qs("#wiz-apiKey-openai")) qs("#wiz-apiKey-openai").value = s.apiKeys?.openai || "";
-    if (qs("#wiz-apiKey-openrouter")) qs("#wiz-apiKey-openrouter").value = s.apiKeys?.openrouter || "";
+    // API Keys
+    const k = s.apiKeys || {};
+    if (mainInput("apiKey-anthropic")) mainInput("apiKey-anthropic").value = k.anthropic || "";
+    if (mainInput("apiKey-openai")) mainInput("apiKey-openai").value = k.openai || "";
+    if (mainInput("apiKey-openrouter")) mainInput("apiKey-openrouter").value = k.openrouter || "";
+    if (wizInput("apiKey-anthropic")) wizInput("apiKey-anthropic").value = k.anthropic || "";
+    if (wizInput("apiKey-openai")) wizInput("apiKey-openai").value = k.openai || "";
+    if (wizInput("apiKey-openrouter")) wizInput("apiKey-openrouter").value = k.openrouter || "";
 
     // Models
     const enabled = new Set((s.models?.enabled) || []);
@@ -200,15 +205,16 @@
   }
 
   // ---------------------------------------------------------------------------
-  // ---------------------------------------------------------------------------
-  // Test API Key — local format check, then tries Tauri IPC if available
+  // Test API Key — local format check first, then tries Tauri IPC
+  // Reads from the wizard input when wizard is visible
   // ---------------------------------------------------------------------------
   async function testApiKey(provider, btn) {
     if (!provider || !btn) return;
     if (btn._testing) return;
     btn._testing = true;
 
-    const input = qs(`#wiz-apiKey-${provider}`) || qs(`#apiKey-${provider}`);
+    // Always read from wizard input when testing from wizard
+    const input = wizInput(`apiKey-${provider}`) || mainInput(`apiKey-${provider}`);
     if (!input) { btn._testing = false; return; }
     const key = (input.value || "").trim();
     const originalText = btn.textContent;
@@ -246,7 +252,7 @@
       // Sidecar not ready yet
       btn.textContent = "waiting";
       btn.style.color = "#fbbf24";
-      btn.title = "Sidecar still starting up — try again in a moment.";
+      btn.title = "Sidecar still starting up — you can continue setup and test later in Settings.";
       setTimeout(() => { btn.textContent = originalText; btn.style.color = ""; btn.disabled = false; btn.title = ""; btn._testing = false; }, 3000);
       return;
     }
@@ -329,6 +335,9 @@
     if (backBtn) backBtn.style.visibility = _wizardStep === 1 ? "hidden" : "visible";
     const nextBtn = qs("#wizardNextBtn");
     if (nextBtn) nextBtn.textContent = _wizardStep === WIZARD_TOTAL_STEPS ? "Launch ProtoAI" : "Next";
+    // Show/hide skip button — only skip on step 1-2, not step 3
+    const skipBtn = qs("#wizardSkipBtn");
+    if (skipBtn) skipBtn.style.display = _wizardStep === WIZARD_TOTAL_STEPS ? "none" : "";
   }
 
   function wizardNext() {
@@ -351,24 +360,31 @@
     _pendingSettings = readAllFromUI();
     _pendingSettings.firstRunCompleted = true;
 
-    // Non-blocking: mark first-run complete via Rust (doesn't depend on sidecar)
+    // Mark first-run complete — non-blocking, sidecar may not be ready
     try {
       await window.__TAURI__.core.invoke("settings_complete_first_run", {});
     } catch (_) {}
 
-    // Best-effort save remaining settings (sidecar may not be ready yet)
-    try {
-      for (const key of Object.keys(_pendingSettings)) {
-        if (key === "version" || key === "firstRunCompleted") continue;
-        await window.__TAURI__.core.invoke("settings_set", { key, value: _pendingSettings[key] });
-      }
-    } catch (_) {}
-
+    // Best-effort save remaining settings (fire-and-forget per key)
     _settings = _pendingSettings;
     _pendingSettings = null;
     applySettingsToApp();
-    closeFirstRunWizard();
 
+    // Save to backend without blocking — the sidecar may still be starting
+    try {
+      const toSave = { ..._settings };
+      delete toSave.firstRunCompleted; // already saved above
+      delete toSave.version;
+      for (const key of Object.keys(toSave)) {
+        if (key === "firstRunCompleted" || key === "version") continue;
+        try {
+          await window.__TAURI__.core.invoke("settings_set", { key, value: _settings[key] });
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    // Close wizard and proceed to main app immediately
+    closeFirstRunWizard();
     if (typeof init === "function") {
       try { init(); } catch (_) {}
     }
@@ -415,7 +431,7 @@
     const skipBtn = qs("#wizardSkipBtn");
     if (skipBtn) skipBtn.addEventListener("click", completeWizard);
 
-    // Test key buttons — register on ALL matching elements (main panel + wizard)
+    // Test key buttons — register on ALL matching elements
     qsa(".test-key-btn").forEach(btn => {
       const provider = btn.dataset.provider;
       if (provider) {
@@ -452,7 +468,6 @@
             _settings = obj;
             populateUI(obj);
             applySettingsToApp();
-            // Also save imported settings to backend
             for (const key of Object.keys(obj)) {
               if (key === "version") continue;
               callTauri("settings_set", { key, value: obj[key] }).catch(() => {});
@@ -474,10 +489,13 @@
         if (e.target === overlay) closeSettingsPanel();
       });
     }
+
+    // Wizard overlay — don't allow closing by clicking outside
     const wizOverlay = qs("#wizardOverlay");
     if (wizOverlay) {
-      wizOverlay.addEventListener("click", e => {
-        // Don't allow closing wizard by clicking outside — force navigation
+      wizOverlay.addEventListener("click", (e) => {
+        // Prevent click-through on wizard overlay
+        e.stopPropagation();
       });
     }
   }
@@ -485,7 +503,7 @@
   function doExportSettings() {
     if (!_settings || Object.keys(_settings).length === 0) return;
     const safeSettings = JSON.parse(JSON.stringify(_settings));
-    delete safeSettings.version; // internal field
+    delete safeSettings.version;
     const blob = new Blob([JSON.stringify(safeSettings, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
