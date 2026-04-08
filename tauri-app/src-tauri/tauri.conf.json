@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "protoai",
-  "version": "0.1.0",
-  "identifier": "com.protoai.app",
+  "version": "0.1.2",
+  "identifier": "com.protoai.dev",
   "build": {
     "frontendDist": "../../ui",
     "beforeDevCommand": "",

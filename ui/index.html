@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>ProtoAI – Dev Console</title>
   <link rel="stylesheet" href="styles.css" />
-  <script>var APP_VERSION="0.1.0";</script>
+  <script>var APP_VERSION="0.1.2";</script>
   <style>html{background:#0d0d0d!important;}</style>
 </head>
 
@@ -236,6 +236,10 @@
             <label for="codingModelSelect">Coding Model</label>
             <select id="codingModelSelect" class="settings-select"></select>
           </div>
+          <div class="setting-row" style="flex-direction:column;align-items:flex-start;margin-top:16px;">
+            <label style="margin-bottom:6px;">Failover Models <span style="color:#666;font-size:11px;font-weight:normal;">(tried in order on rate limit / server error)</span></label>
+            <div id="failoverCheckboxes"></div>
+          </div>
         </div>
 
         <div id="settings-profiles" class="settings-section">
@@ -275,13 +279,6 @@
           <div class="setting-row">
             <label for="retryCount">Retry Count</label>
             <input type="number" id="retryCount" class="settings-input" min="0" max="10" value="3" />
-          </div>
-          <div class="setting-row">
-            <label for="fallbackBehavior">Fallback Behavior</label>
-            <select id="fallbackBehavior" class="settings-select">
-              <option value="http">Use HTTP Fallback (port 17890)</option>
-              <option value="off">Disable Fallback — Show Error</option>
-            </select>
           </div>
         </div>
 

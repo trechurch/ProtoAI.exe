@@ -15,6 +15,11 @@ const DEFAULTS = {
       "qwen/qwen3.6-plus:free",
     ],
     defaults: { default: "qwen/qwen3.6-plus:free", coding: "anthropic/claude-3.5-sonnet" },
+    failoverList: [
+      "qwen/qwen3.6-plus:free",
+      "google/gemma-7b-it:free",
+      "mistral/mistral-small:free",
+    ],
   },
   profiles: { defaultProfile: "default", fallbackProfile: "analysis" },
   ingestion: {

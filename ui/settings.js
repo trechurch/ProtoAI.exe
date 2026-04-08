@@ -14,40 +14,19 @@
   function qs(sel) { return document.querySelector(sel); }
   function qsa(sel) { return document.querySelectorAll(sel); }
 
-  // Unified backend caller — Tauri IPC primary, HTTP fallback
+  // Unified backend caller — Tauri IPC only
   async function callTauri(cmd, args) {
-    if (TAURI_AVAILABLE) {
-      return await window.__TAURI__.core.invoke(cmd, args);
-    }
-    // HTTP fallback (dev mode — server.js on localhost:17890)
     if (cmd === "settings_get") {
-      const r = await fetch(`${HTTP_BASE}/settings`);
-      const data = await r.json();
-      return data?.settings || {};
+      return await window.__TAURI__.core.invoke("settings_get", {});
     }
     if (cmd === "settings_set") {
-      await fetch(`${HTTP_BASE}/settings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "set", key: args.key, value: args.value }),
-      });
-      // Return the full settings from server so caller sees updated state
-      const r = await fetch(`${HTTP_BASE}/settings`);
-      const data = await r.json();
-      return data?.settings || {};
+      return await window.__TAURI__.core.invoke("settings_set", { key: args.key, value: args.value });
     }
     if (cmd === "settings_test_key") {
-      const r = await fetch(`${HTTP_BASE}/settings/test-key`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: args.provider, key: args.key }),
-      });
-      return await r.json();
+      return await window.__TAURI__.core.invoke("settings_test_key", { provider: args.provider, key: args.key });
     }
     if (cmd === "settings_first_run_status") {
-      // If no Tauri and no HTTP fallback available, default to non-first-run
-      // (user launched via HTTP server, meaning they've run before)
-      return { firstRunCompleted: true };
+      return await window.__TAURI__.core.invoke("settings_first_run_status", {});
     }
     return null;
   }
@@ -104,6 +83,7 @@
         default: qs("#defaultModelSelect")?.value || "qwen/qwen3.6-plus:free",
         coding: qs("#codingModelSelect")?.value || "anthropic/claude-3.5-sonnet",
       },
+      failoverList: qsa(".failover-cb:checked").map(cb => cb.value),
     };
     const profiles = {
       defaultProfile: qs("#defaultProfile")?.value || "default",
@@ -117,7 +97,6 @@
     const backend = {
       timeoutMs: Math.max(5000, Math.min(120000, parseInt(qs("#timeoutMs")?.value || "30000", 10) || 30000)),
       retryCount: Math.max(0, Math.min(10, parseInt(qs("#retryCount")?.value || "3", 10) || 3)),
-      fallbackBehavior: qs("#fallbackBehavior")?.value || "http",
     };
     const spellcheck = { enabled: !!(qs("#spellcheckEnabled")?.checked) };
     const advanced = { debugLogging: !!(qs("#debugLogging")?.checked) };
@@ -167,34 +146,31 @@
         `<option value="${m}" ${(s.models?.defaults?.coding) === m ? "selected" : ""}>${m}</option>`
       ).join("");
     }
+    // Failover list
+    const failoverModels = [
+      "qwen/qwen3.6-plus:free",
+      "qwen/qwen-2-7b-instruct:free",
+      "openai/gpt-4o-mini",
+      "anthropic/claude-3.5-sonnet",
+    ];
+    const failoverDiv = qs("#failoverCheckboxes");
+    if (failoverDiv) {
+      failoverDiv.innerHTML = "";
+      failoverDiv.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;";
+      const failoverSet = new Set(s.models?.failoverList || []);
+      failoverModels.forEach(m => {
+        const lbl = document.createElement("label");
+        lbl.style.cssText = "font-size:12px;color:#999;display:flex;align-items:center;gap:2px;";
+        lbl.innerHTML = `<input type="checkbox" class="failover-cb" value="${m}" ${failoverSet.has(m) ? "checked" : ""} /> ${m}`;
+        failoverDiv.appendChild(lbl);
+      });
+    }
 
     // Profiles
     if (qs("#defaultProfile")) qs("#defaultProfile").value = s.profiles?.defaultProfile || "default";
     if (qs("#fallbackProfile")) qs("#fallbackProfile").value = s.profiles?.fallbackProfile || "analysis";
 
     // Ingestion
-    if (qs("#maxDepth")) qs("#maxDepth").value = s.ingestion?.maxDepth || 4;
-    if (qs("#maxFileSizeMB")) qs("#maxFileSizeMB").value = s.ingestion?.maxFileSizeMB || 10;
-    const exts = [".js", ".ts", ".py", ".rs", ".go", ".java", ".md", ".txt", ".json", ".html", ".css", ".xml", ".yaml", ".yml", ".sh", ".bat"];
-    const extDiv = qs("#extensionCheckboxes");
-    if (extDiv) {
-      extDiv.innerHTML = "";
-      const supported = new Set((s.ingestion?.supportedExtensions) || [".js", ".ts", ".py", ".rs", ".go", ".md", ".txt", ".json", ".html", ".css"]);
-      extDiv.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;";
-      exts.forEach(e => {
-        const lbl = document.createElement("label");
-        lbl.style.cssText = "font-size:11px;color:#999;display:flex;align-items:center;gap:2px;";
-        lbl.innerHTML = `<input type="checkbox" class="ext-cb" value="${e}" ${supported.has(e) ? "checked" : ""} /> ${e}`;
-        extDiv.appendChild(lbl);
-      });
-    }
-
-    // Backend
-    if (qs("#timeoutMs")) qs("#timeoutMs").value = s.backend?.timeoutMs || 30000;
-    if (qs("#retryCount")) qs("#retryCount").value = s.backend?.retryCount || 3;
-    if (qs("#fallbackBehavior")) qs("#fallbackBehavior").value = s.backend?.fallbackBehavior || "http";
-
-    // Spellcheck
     if (qs("#spellcheckEnabled")) qs("#spellcheckEnabled").checked = !!(s.spellcheck?.enabled);
 
     // Advanced
@@ -248,24 +224,9 @@
 
     let result = null;
 
-    // Primary: Tauri IPC
-    if (TAURI_AVAILABLE) {
-      try {
-        result = await window.__TAURI__.core.invoke("settings_test_key", { provider, key });
-      } catch (_) { result = null; }
-    }
-
-    // Fallback: HTTP server (dev mode)
-    if (!result) {
-      try {
-        const r = await fetch(`${HTTP_BASE}/settings/test-key`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider, key }),
-        });
-        result = await r.json();
-      } catch (_) { result = null; }
-    }
+    try {
+      result = await window.__TAURI__.core.invoke("settings_test_key", { provider, key });
+    } catch (_) { result = null; }
 
     if (result && result.ok) {
       btn.textContent = "OK";
@@ -367,32 +328,24 @@
     _pendingSettings = readAllFromUI();
     _pendingSettings.firstRunCompleted = true;
 
-    // Retry saving settings until the Tauri bridge is ready (max 30s)
-    let saved = false;
-    for (let attempt = 0; attempt < 30; attempt++) {
-      try {
-        for (const key of Object.keys(_pendingSettings)) {
-          if (key === "version") continue;
-          try {
-            await window.__TAURI__.core.invoke("settings_set", { key, value: _pendingSettings[key] });
-          } catch (_) {}
-        }
-        saved = true;
-        break;
-      } catch (_) {
-        await new Promise(res => setTimeout(res, 1000));
+    // Non-blocking: mark first-run complete via Rust (doesn't depend on sidecar)
+    try {
+      await window.__TAURI__.core.invoke("settings_complete_first_run", {});
+    } catch (_) {}
+
+    // Best-effort save remaining settings (sidecar may not be ready yet)
+    try {
+      for (const key of Object.keys(_pendingSettings)) {
+        if (key === "version" || key === "firstRunCompleted") continue;
+        await window.__TAURI__.core.invoke("settings_set", { key, value: _pendingSettings[key] });
       }
-    }
+    } catch (_) {}
 
-    if (saved) {
-      _settings = _pendingSettings;
-      _pendingSettings = null;
-      applySettingsToApp();
-    }
-
+    _settings = _pendingSettings;
+    _pendingSettings = null;
+    applySettingsToApp();
     closeFirstRunWizard();
 
-    // Proceed to main app
     if (typeof init === "function") {
       try { init(); } catch (_) {}
     }

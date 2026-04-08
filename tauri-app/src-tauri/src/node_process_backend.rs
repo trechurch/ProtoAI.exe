@@ -115,9 +115,9 @@ impl NodeProcessBackend {
     /// Per-message-type timeouts so fast ops don't block behind a hung chat.
     fn timeout_for(msg_type: &str) -> Duration {
         match msg_type {
-            "projects" | "profiles" | "ingest" => Duration::from_secs(10),
-            "history" | "upload" => Duration::from_secs(15),
-            "chat" | "image_gen" | "deep_search" => Duration::from_secs(180),
+            "projects" | "profiles" => Duration::from_secs(10),
+            "ingest" | "history" | "upload" => Duration::from_secs(15),
+            "chat" | "image_gen" | "deep_search" | "qmd_index" => Duration::from_secs(180),
             _ => Duration::from_secs(30),
         }
     }

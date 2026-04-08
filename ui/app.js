@@ -1,10 +1,8 @@
 // ============================================================
-// Backend Bridge
-// Tauri IPC primary; HTTP localhost:17890 fallback
+// Tauri IPC backend
 // ============================================================
 
 const TAURI_AVAILABLE = !!(window.__TAURI__?.core?.invoke);
-const HTTP_BASE = "http://127.0.0.1:17890";
 
 const ENGINES = [
   "anthropic/claude-3.5-sonnet",
@@ -14,7 +12,7 @@ const ENGINES = [
   "qwen/qwen3.6-plus:free",
 ];
 
-console.log(`[ProtoAI] Backend: ${TAURI_AVAILABLE ? "Tauri IPC" : "HTTP :17890"}`);
+console.log(`[ProtoAI] Backend: ${TAURI_AVAILABLE ? "Tauri IPC" : "unavailable"}`);
 
 // ============================================================
 // Backend Status — tooltip on badge + sidebar dot
@@ -23,7 +21,7 @@ console.log(`[ProtoAI] Backend: ${TAURI_AVAILABLE ? "Tauri IPC" : "HTTP :17890"}
 function setBackendStatus(mode, detail = "") {
   const labels = {
     tauri:       "Backend: Tauri IPC (sidecar active)",
-    http:        "Backend: HTTP fallback — port 17890",
+    http:        "Backend: initializing…",
     crashed:     "Sidecar crashed (3/3). Use Reconnect.",
     unavailable: "Backend: sidecar initializing…",
     offline:     "Backend: offline",
@@ -39,7 +37,7 @@ function setBackendStatus(mode, detail = "") {
     dot.className = `status-dot ${mode}`;
   }
   if (label) {
-    label.textContent = { tauri: "Tauri IPC", http: "HTTP :17890",
+    label.textContent = { tauri: "Tauri IPC", http: "Starting…",
       crashed: "Crashed", unavailable: "Starting…", offline: "Offline" }[mode] ?? mode;
   }
 }
@@ -88,78 +86,7 @@ function showToast(msg) {
 }
 
 // ============================================================
-// fetch with timeout
-// ============================================================
-
-async function fetchWithTimeout(url, opts = {}, ms = 30_000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ms);
-  try {
-    return await fetch(url, { ...opts, signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// ============================================================
-// HTTP fallback — workflow name → REST endpoint
-// ============================================================
-
-async function httpFallback(name, payload) {
-  switch (name) {
-    case "ListProjectsWorkflow": {
-      const res = await fetchWithTimeout(`${HTTP_BASE}/projects`);
-      if (!res.ok) throw new Error(`/projects ${res.status}`);
-      return res.json();
-    }
-    case "ListProfilesWorkflow": {
-      const res = await fetchWithTimeout(`${HTTP_BASE}/profiles`);
-      if (!res.ok) throw new Error(`/profiles ${res.status}`);
-      const data = await res.json();
-      const profiles = Object.entries(data.profiles || {}).map(([id, p]) => ({
-        id, name: typeof p === "object" ? (p.name || id) : id,
-      }));
-      return { profiles };
-    }
-    case "LoadProjectHistoryWorkflow": {
-      const res = await fetchWithTimeout(`${HTTP_BASE}/history/${encodeURIComponent(payload.project)}`);
-      if (!res.ok) throw new Error(`/history ${res.status}`);
-      const data = await res.json();
-      const flat = Array.isArray(data.history) ? data.history : [];
-      const history = [];
-      for (let i = 0; i + 1 < flat.length; i += 2)
-        history.push({ user: flat[i]?.message ?? "", ai: flat[i + 1]?.message ?? "" });
-      return { history };
-    }
-    case "ChatSessionWorkflow": {
-      const { action, project, chatId, name, entry } = payload;
-      const res = await fetchWithTimeout(`${HTTP_BASE}/sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, project, chatId, name }),
-      });
-      if (!res.ok) throw new Error(`/sessions ${res.status}`);
-      return await res.json();
-    }
-    case "SendMessageWorkflow": {
-      const { project, profile, engine, message } = payload;
-      const res = await fetchWithTimeout(`${HTTP_BASE}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project, profile, engine, message }),
-      });
-      if (!res.ok) throw new Error(`/chat ${res.status}`);
-      const data = await res.json();
-      return { reply: data.response || data.reply || "(no response)" };
-    }
-    default:
-      throw new Error(`No HTTP fallback for workflow: ${name}`);
-  }
-}
-
-// ============================================================
-// runWorkflow — routes to engine_* Tauri commands (persistent
-// sidecar IPC), then HTTP fallback if unavailable.
+// runWorkflow — routes to engine_* Tauri commands (IPC only)
 // ============================================================
 
 async function invokeTauri(workflow, payload) {
@@ -199,44 +126,30 @@ async function invokeTauri(workflow, payload) {
 }
 
 async function runWorkflow(name, payload) {
+  if (!TAURI_AVAILABLE) {
+    setBackendStatus("offline");
+    throw new Error("Tauri IPC not available");
+  }
   try {
-    let result;
-    if (TAURI_AVAILABLE) {
-      try {
-        result = await invokeTauri(name, payload);
-        setBackendStatus("tauri");
-      } catch (tauriErr) {
-        const msg = String(tauriErr);
-        // Only fall back to HTTP for transport-level failures (sidecar crashed / not responding).
-        // Application errors (LLM failed, bad input, empty response) should bubble up directly.
-        const isTransportError = msg.toLowerCase().includes("crash")
-          || msg.toLowerCase().includes("not ready")
-          || msg.toLowerCase().includes("sidecar")
-          || msg.toLowerCase().includes("timed out")
-          || msg.toLowerCase().includes("write to sidecar")
-          || msg.toLowerCase().includes("failed to fetch")
-          || msg.toLowerCase().includes("net::err");
-        // Do NOT match "ipc error" — that's application-level errors from the sidecar
-        if (isTransportError) {
-          console.warn(`[Workflow] Tauri transport failed (${msg})`);
-          try {
-            const status = await window.__TAURI__.core.invoke("engine_status");
-            if (status === "crashed") { setBackendStatus("crashed"); showReconnectButton(); }
-          } catch (_) {}
-          result = await httpFallback(name, payload);
-          setBackendStatus("http");
-        } else {
-          // Real application error — rethrow it.
-          console.warn(`[Workflow] Tauri app error (${msg})`);
-          throw new Error(msg);
-        }
-      }
-    } else {
-      result = await httpFallback(name, payload);
-      setBackendStatus("http");
-    }
+    const result = await invokeTauri(name, payload);
+    setBackendStatus("tauri");
     return result;
   } catch (err) {
+    const msg = String(err).toLowerCase();
+    const isTransportError = msg.includes("crash")
+      || msg.includes("not ready")
+      || msg.includes("sidecar")
+      || msg.includes("timed out")
+      || msg.includes("write to sidecar")
+      || msg.includes("failed to fetch")
+      || msg.includes("net::err");
+    if (isTransportError) {
+      console.warn(`[Workflow] Tauri transport failed: ${err.message}`);
+      try {
+        const status = await window.__TAURI__.core.invoke("engine_status");
+        if (status === "crashed") { setBackendStatus("crashed"); showReconnectButton(); }
+      } catch (_) {}
+    }
     setBackendStatus("offline");
     throw err;
   }
@@ -403,19 +316,7 @@ async function loadProfiles() {
 
 async function loadHistory(project) {
   const res = await runWorkflow("LoadProjectHistoryWorkflow", { project });
-  const raw = res.history || [];
-  // Normalize: engine_history returns [{ role, message }], HTTP fallback
-  // returns pre-paired [{ user, ai }]. Detect and normalize to flat role-based.
-  if (raw.length > 0 && ("user" in raw[0] || "ai" in raw[0])) {
-    // Already paired (HTTP fallback shape) — flatten back to role-based
-    const flat = [];
-    raw.forEach(pair => {
-      if (pair.user) flat.push({ role: "user",      message: pair.user });
-      if (pair.ai)   flat.push({ role: "assistant",  message: pair.ai });
-    });
-    return flat;
-  }
-  return raw; // already [{ role, message }]
+  return res.history || [];
 }
 
 async function sendChatMessage(project, profile, engine, message) {
@@ -426,7 +327,6 @@ async function sendChatMessage(project, profile, engine, message) {
   if (res && res.error) {
     throw new Error(res.detail || res.error || (res.stderr ? res.stderr.slice(0, 200) : "Unknown LLM error"));
   }
-  // engine_chat returns { response: "..." }, HTTP fallback returns { reply: "..." }
   return res.response || res.reply || "(no response)";
 }
 
@@ -503,7 +403,7 @@ async function loadBackendData(attempt = 1) {
       console.error("[init] Gave up after retries:", err);
       showError(
         `Failed to connect to backend after ${MAX_ATTEMPTS - 1} attempts. ` +
-        (TAURI_AVAILABLE ? "Sidecar failed to start." : `Is server.js running on port 17890?`) +
+        "Sidecar failed to start." +
         ` (${err.message})`
       );
     }
@@ -1673,25 +1573,46 @@ async function onAddSource() {
 async function triggerIngest() {
   if (!currentProject) { showToast("Select a project first."); return; }
 
-  // Open file picker to let user choose files to ingest
-  document.getElementById("fileInput").click();
-
-  // After files are attached, call the backend ingest to index them
-  const thinking = appendMessage("assistant", "");
-  thinking.classList.add("thinking");
-  try {
-    const res = await runWorkflow("UploadWorkflow", {
-      project: currentProject,
-      filename: ".ingest_trigger",
-      content: new Date().toISOString(),
-    });
-    thinking.remove();
-    const fileCount = attachedFiles.length;
-    appendMessage("assistant", `✅ **Code ingested** — ${fileCount} file(s) attached to project "${currentProject}". Their contents are available as context for future messages.`);
-  } catch (err) {
-    thinking.remove();
-    showError(`Ingest failed: ${err.message}`);
+  if (isTauri()) {
+    try {
+      appendMessage("assistant", `⏳ Indexing project "${currentProject}" with qmd...`);
+      const res = await window.__TAURI__.core.invoke("engine_qmd_index", {
+        project: currentProject,
+        deep_scan: false,
+      });
+      clearLastMessage();
+      appendMessage("assistant", `✅ **Code indexed** — project "${currentProject}" is now searchable via qmd. Use the Tools tab to run semantic searches.`);
+    } catch (err) {
+      clearLastMessage();
+      showError(`QMD indexing failed: ${err.message || err}`);
+    }
+  } else {
+    // HTTP fallback: open file picker
+    document.getElementById("fileInput").click();
+    const thinking = appendMessage("assistant", "");
+    thinking.classList.add("thinking");
+    try {
+      await runWorkflow("UploadWorkflow", {
+        project: currentProject,
+        filename: ".ingest_trigger",
+        content: new Date().toISOString(),
+      });
+      thinking.remove();
+      const fileCount = attachedFiles.length;
+      appendMessage("assistant", `✅ **Code ingested** — ${fileCount} file(s) attached to project "${currentProject}". Their contents are available as context for future messages.`);
+    } catch (err) {
+      thinking.remove();
+      showError(`Ingest failed: ${err.message}`);
+    }
   }
+}
+
+function clearLastMessage() {
+  const containers = document.querySelectorAll("#chatContainer");
+  containers.forEach(c => {
+    const msgs = c.querySelectorAll(".message");
+    if (msgs.length > 0) msgs[msgs.length - 1].remove();
+  });
 }
 
 // ============================================================
@@ -2009,15 +1930,6 @@ window.addEventListener("DOMContentLoaded", async () => {
           break;
         } catch (_) {}
       }
-      // HTTP fallback
-      try {
-        const r = await fetch(`${HTTP_BASE}/settings`);
-        if (r.ok) {
-          const data = await r.json();
-          firstRun = data?.settings?.firstRunCompleted !== true;
-          resolved = true;
-        }
-      } catch (_) {}
       // Sidecar may still be starting — wait before retry
       if (!resolved) {
         await new Promise(res => setTimeout(res, 800));

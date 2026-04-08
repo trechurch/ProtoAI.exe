@@ -177,6 +177,26 @@ impl EngineBridge {
         self.send_request("ingest", serde_json::json!({ "project": project })).await
     }
 
+    pub async fn qmd_index(
+        &self,
+        project: String,
+        deep_scan: bool,
+    ) -> Result<serde_json::Value> {
+        self.send_request(
+            "qmd_index",
+            serde_json::json!({ "project": project, "deep_scan": deep_scan }),
+        )
+        .await
+    }
+
+    pub async fn qmd_search(&self, query: String, project: String) -> Result<serde_json::Value> {
+        self.send_request(
+            "qmd_search",
+            serde_json::json!({ "query": query, "project": project }),
+        )
+        .await
+    }
+
     // Settings
     pub async fn get_settings(&self) -> Result<serde_json::Value> {
         self.send_request("settings", serde_json::json!({ "action": "get" })).await

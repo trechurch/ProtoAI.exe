@@ -41,6 +41,7 @@ const SendMessageWorkflow = require("./orchestration/workflows/SendMessageWorkfl
 const ImageGenWorkflow = require("./orchestration/workflows/ImageGenWorkflow");
 const DeepSearchWorkflow = require("./orchestration/workflows/DeepSearchWorkflow");
 const ChatSessionWorkflow = require("./orchestration/workflows/ChatSessionWorkflow");
+const IngestWorkflow = require("./orchestration/workflows/IngestWorkflow");
 
 // Access Layer
 const paths = require("./access/env/paths");
@@ -54,6 +55,7 @@ registry.register("SendMessageWorkflow", new SendMessageWorkflow());
 registry.register("ImageGenWorkflow", new ImageGenWorkflow());
 registry.register("DeepSearchWorkflow", new DeepSearchWorkflow());
 registry.register("ChatSessionWorkflow", new ChatSessionWorkflow());
+registry.register("IngestWorkflow", new IngestWorkflow());
 
 // Instantiate repositories
 const projectRepo = new FsProjectRepository();
@@ -266,6 +268,30 @@ async function handleSettingsIPC(payload) {
   }
 }
 
+// qmd_index: index project into qmd vector store
+async function handleQmdIndexIPC(payload) {
+  const { project, deep_scan = false } = payload || {};
+  if (!project) return { ok: false, error: "Missing 'project' in payload for qmd_index" };
+  try {
+    const workflow = registry.get("IngestWorkflow");
+    return await workflow.run({ project, deep_scan });
+  } catch (err) {
+    return { ok: false, error: "QMD indexing failed", detail: err.message };
+  }
+}
+
+// qmd_search: search indexed project content via qmd
+async function handleQmdSearchIPC(payload) {
+  const { query, project, sql = false } = payload || {};
+  if (!query) return { ok: false, error: "Missing 'query' in payload for qmd_search" };
+  try {
+    const workflow = registry.get("IngestWorkflow");
+    return await workflow.search({ query, project, sql });
+  } catch (err) {
+    return { ok: false, error: "QMD search failed", detail: err.message };
+  }
+}
+
 // -----------------------------------------------------------------------------
 // IPC message dispatcher
 // -----------------------------------------------------------------------------
@@ -301,6 +327,10 @@ async function dispatchMessage(msg) {
       result = await handleDeepSearchIPC(payload); break;
     case "settings":
       result = await handleSettingsIPC(payload); break;
+    case "qmd_index":
+      result = await handleQmdIndexIPC(payload); break;
+    case "qmd_search":
+      result = await handleQmdSearchIPC(payload); break;
     default:
       return { id, ok: false, error: `Unknown message type: ${type}` };
   }

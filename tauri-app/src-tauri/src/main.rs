@@ -130,7 +130,7 @@ fn main() {
                     }
                     Err(err) => {
                         eprintln!("[ProtoAI] Failed to initialize EngineBridge: {err}");
-                        eprintln!("[ProtoAI] UI HTTP fallback (port 17890) will be used.");
+                        eprintln!("[ProtoAI] Use the Reconnect button in the UI to retry.");
                     }
                 }
             });
@@ -149,10 +149,13 @@ fn main() {
             commands::engine_chat,
             commands::engine_upload,
             commands::engine_ingest,
+            commands::engine_qmd_index,
+            commands::engine_qmd_search,
             commands::settings_get,
             commands::settings_set,
             commands::settings_test_key,
             commands::settings_first_run_status,
+            commands::settings_complete_first_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ProtoAI Tauri application");

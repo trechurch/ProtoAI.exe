@@ -177,12 +177,14 @@ function sendRequest(model, callback) {
                 if (!res.statusCode || res.statusCode >= 400) {
                     const errMsg = JSON.stringify(json);
                     console.error(`OpenRouter error [${res.statusCode}] for ${model}: ${errMsg.slice(0, 500)}`);
-                    return callback(new Error(`HTTP ${res.statusCode}`), null);
+                    const err = new Error(`HTTP ${res.statusCode}`);
+                    err.statusCode = res.statusCode;
+                    return callback(err, null);
                 }
                 const reply = json.choices?.[0]?.message?.content || "";
                 callback(null, reply);
             } catch (e) {
-                console.error(`OpenRouter parse error for ${model}: ${data.slice(0, 500)}`);
+                console.error(`Parse error for ${model}: ${data.slice(0, 500)}`);
                 callback(e, null);
             }
         });
@@ -203,40 +205,67 @@ function sendRequest(model, callback) {
     req.end();
 }
 
-// -------------------------------
-// FALLBACK CHAIN
-// -------------------------------
-const modelsToTry = [p.model, ...(p.fallback || [])];
-
-function tryNextModel(index = 0) {
-    if (index >= modelsToTry.length) {
-        console.error("All models failed.");
-        process.exit(1);
-    }
-
-    const model = modelsToTry[index];
-
-    sendRequest(model, (err, reply) => {
-        if (err || !reply) {
-            return tryNextModel(index + 1);
-        }
-
-        let output;
-        try {
-            output = processOutput(reply);
-        } catch (e) {
-            console.error(`Output processing failed for ${model}: ${e.message}`);
-            output = reply.trim(); // fall back to raw response
-        }
-
-        if (!output) {
-            return tryNextModel(index + 1);
-        }
-
-        console.log(output);
-    });
+// Determine whether an error means the *provider* is rate-limiting or down,
+// vs. a config problem that would hit every model the same way.
+function isFailoverError(err, statusCode) {
+    if (!err) return false;
+    const msg = String(err);
+    // Rate limits, overload, upstream errors — worth trying another model
+    if (statusCode === 429) return true;
+    if (statusCode >= 500) return true;
+    if (/timed out|timeout|network|ECONNRESET|ENOTFOUND|ECONNREFUSED/i.test(msg)) return true;
+    // 400 (bad request), 401 (bad key), 403 (forbidden) are config problems — don't failover
+    return false;
 }
 
+// -------------------------------
+// FALLBACK CHAIN + GLOBAL FAILOVER LIST
+// -------------------------------
+const globalFailover = (settings?.models?.failoverList || []).filter(
+  m => ![p.model, ...(p.fallback || [])].includes(m)
+);
+const modelsToTry = [p.model, ...(p.fallback || []), ...globalFailover];
+
+function tryNextModel(index = 0, skipFailover = false) {
+  if (index >= modelsToTry.length) {
+    console.error("All models failed.");
+    process.exit(1);
+  }
+
+  const model = modelsToTry[index];
+
+  sendRequest(model, (err, reply) => {
+    if (!err && reply) {
+      let output;
+      try {
+        output = processOutput(reply);
+      } catch (e) {
+        console.error(`Output processing failed for ${model}: ${e.message}`);
+        output = reply.trim();
+      }
+
+      if (!output) {
+        return tryNextModel(index + 1, skipFailover);
+      }
+
+      if (index > 0) {
+        console.error(`[failover] Using ${model} after ${index} failure(s)`);
+      }
+      console.log(output);
+      return;
+    }
+
+    const statusCode = err?.statusCode || null;
+    if (!skipFailover && isFailoverError(err, statusCode)) {
+      console.error(`[failover] ${model} returned ${statusCode ? `HTTP ${statusCode}` : err.message} — trying next model`);
+      return tryNextModel(index + 1, false);
+    }
+
+    // Config error (400/401/403) — rethrow immediately
+    console.error(`[failover] ${model} failed with non-retryable error: ${err?.message || 'empty response'}`);
+    process.exit(1);
+  });
+}
 // -------------------------------
 // OUTPUT PROCESSING
 // -------------------------------

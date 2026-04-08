@@ -9,7 +9,7 @@ use crate::engine_bridge::BridgeState;
 
 const NOT_READY: &str =
     "EngineBridge not ready — sidecar failed to start or is still initializing. \
-     UI HTTP fallback (port 17890) should be active.";
+     Use the Reconnect button if this persists.";
 
 const GIVEN_UP: &str =
     "Sidecar crashed too many times (threshold: 3). \
@@ -91,6 +91,30 @@ pub async fn engine_ingest(
     project: String,
 ) -> Result<Value, String> {
     with_bridge!(bridge, |b| b.ingest(project))
+}
+
+// -----------------------------
+// engine_qmd_index
+// -----------------------------
+#[tauri::command]
+pub async fn engine_qmd_index(
+    bridge: State<'_, BridgeState>,
+    project: String,
+    deep_scan: bool,
+) -> Result<Value, String> {
+    with_bridge!(bridge, |b| b.qmd_index(project, deep_scan))
+}
+
+// -----------------------------
+// engine_qmd_search
+// -----------------------------
+#[tauri::command]
+pub async fn engine_qmd_search(
+    bridge: State<'_, BridgeState>,
+    query: String,
+    project: String,
+) -> Result<Value, String> {
+    with_bridge!(bridge, |b| b.qmd_search(query, project))
 }
 
 // -----------------------------
@@ -183,4 +207,12 @@ pub async fn settings_first_run_status(bridge: State<'_, BridgeState>) -> Result
     Ok(serde_json::json!({
         "firstRunCompleted": settings["firstRunCompleted"].as_bool().unwrap_or(false)
     }))
+}
+
+#[tauri::command]
+pub async fn settings_complete_first_run(bridge: State<'_, BridgeState>) -> Result<Value, String> {
+    // Non-blocking: attempt sidecar write, but don't fail if not ready
+    // The setting still gets persisted when wizard finishes via sidecar
+    let _ = with_bridge!(bridge, |b| b.set_settings("firstRunCompleted".into(), serde_json::json!(true)));
+    Ok(serde_json::json!({ "ok": true }))
 }
