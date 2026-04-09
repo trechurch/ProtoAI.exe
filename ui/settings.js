@@ -357,6 +357,15 @@
   }
 
   async function completeWizard() {
+    const nextBtn = qs("#wizardNextBtn");
+    const skipBtn = qs("#wizardSkipBtn");
+    const backBtn = qs("#wizardBackBtn");
+
+    // Disable all wizard buttons immediately to prevent double-click
+    if (nextBtn) { nextBtn.disabled = true; nextBtn.textContent = "Launching..."; }
+    if (skipBtn) skipBtn.disabled = true;
+    if (backBtn) backBtn.disabled = true;
+
     _pendingSettings = readAllFromUI();
     _pendingSettings.firstRunCompleted = true;
 
@@ -365,31 +374,47 @@
       await window.__TAURI__.core.invoke("settings_complete_first_run", {});
     } catch (_) {}
 
-    // Best-effort save remaining settings (fire-and-forget per key)
-    _settings = _pendingSettings;
-    _pendingSettings = null;
-    applySettingsToApp();
+    // Save remaining settings — fire-and-forget, don't block the UI
+    const settingsToSave = { ..._pendingSettings };
+    delete settingsToSave.version;
 
-    // Save to backend without blocking — the sidecar may still be starting
     try {
-      const toSave = { ..._settings };
-      delete toSave.firstRunCompleted; // already saved above
-      delete toSave.version;
-      for (const key of Object.keys(toSave)) {
-        if (key === "firstRunCompleted" || key === "version") continue;
+      for (const key of Object.keys(settingsToSave)) {
+        if (key === "version" || key === "firstRunCompleted") continue;
         try {
-          await window.__TAURI__.core.invoke("settings_set", { key, value: _settings[key] });
-        } catch (_) {}
+          await window.__TAURI__.core.invoke("settings_set", {
+            key,
+            value: settingsToSave[key]
+          });
+        } catch (_) {
+          // Individual key save failures are non-critical
+        }
       }
-    } catch (_) {}
+    } catch (_) {
+      // If the entire settings save fails, continue anyway
+      console.warn("[Wizard] Settings save failed — continuing with first-run");
+    }
 
-    // Close wizard and proceed to main app immediately
+    _settings = settingsToSave;
+    _settings.firstRunCompleted = true;
+    _pendingSettings = null;
+
+    try { applySettingsToApp(); } catch (_) {}
+
+    // Close wizard overlay immediately
     closeFirstRunWizard();
+
+    // Proceed to main app — non-blocking
     if (typeof init === "function") {
-      try { init(); } catch (_) {}
+      try {
+        init();
+      } catch (err) {
+        console.error("[Wizard] init() failed:", err);
+      }
     }
   }
 
+  // Export window functions BEFORE the DOMContentLoaded handler
   window.openFirstRunWizard = openFirstRunWizard;
   window.closeFirstRunWizard = closeFirstRunWizard;
   window.wizardNext = wizardNext;
@@ -403,7 +428,8 @@
   function setupSettingsPanel() {
     // Nav tabs
     qsa(".settings-nav-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const section = btn.dataset.section;
         qsa(".settings-nav-btn").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
@@ -415,38 +441,62 @@
 
     // Settings header close
     const closeBtn = qs("#settingsCloseBtn");
-    if (closeBtn) closeBtn.addEventListener("click", closeSettingsPanel);
+    if (closeBtn) closeBtn.addEventListener("click", (e) => { e.stopPropagation(); closeSettingsPanel(); });
 
     // Save / Cancel
     const saveBtn = qs("#settingsSaveBtn");
-    if (saveBtn) saveBtn.addEventListener("click", saveSettings);
+    if (saveBtn) saveBtn.addEventListener("click", (e) => { e.stopPropagation(); saveSettings(); });
     const cancelBtn = qs("#settingsCancelBtn");
-    if (cancelBtn) cancelBtn.addEventListener("click", closeSettingsPanel);
+    if (cancelBtn) cancelBtn.addEventListener("click", (e) => { e.stopPropagation(); closeSettingsPanel(); });
 
-    // Wizard navigation
+    // Wizard navigation — always registered, regardless of which step is visible
     const nextBtn = qs("#wizardNextBtn");
-    if (nextBtn) nextBtn.addEventListener("click", wizardNext);
+    if (nextBtn) {
+      nextBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        console.log("[Wizard] Next button clicked, step:", _wizardStep);
+        wizardNext();
+      });
+    }
     const backBtn = qs("#wizardBackBtn");
-    if (backBtn) backBtn.addEventListener("click", wizardBack);
+    if (backBtn) {
+      backBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        wizardBack();
+      });
+    }
     const skipBtn = qs("#wizardSkipBtn");
-    if (skipBtn) skipBtn.addEventListener("click", completeWizard);
+    if (skipBtn) {
+      skipBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        console.log("[Wizard] Skip button clicked");
+        completeWizard();
+      });
+    }
 
     // Test key buttons — register on ALL matching elements
     qsa(".test-key-btn").forEach(btn => {
       const provider = btn.dataset.provider;
       if (provider) {
-        btn.addEventListener("click", () => testApiKey(provider, btn));
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          testApiKey(provider, btn);
+        });
       }
     });
 
     // Export settings
     const exportBtn = qs("#exportSettingsBtn");
-    if (exportBtn) exportBtn.addEventListener("click", () => {
+    if (exportBtn) exportBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (!_settings || Object.keys(_settings).length === 0) {
         loadSettings().then(s => {
           _settings = s;
           doExportSettings();
-        });
+        }).catch(() => {});
         return;
       }
       doExportSettings();
@@ -454,7 +504,8 @@
 
     // Import settings
     const importBtn = qs("#importSettingsBtn");
-    if (importBtn) importBtn.addEventListener("click", () => {
+    if (importBtn) importBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       const input = document.createElement("input");
       input.type = "file";
       input.accept = ".json";
@@ -485,7 +536,7 @@
     // Click outside panel to close (but not clicks on the panel itself)
     const overlay = qs("#settingsOverlay");
     if (overlay) {
-      overlay.addEventListener("click", e => {
+      overlay.addEventListener("click", (e) => {
         if (e.target === overlay) closeSettingsPanel();
       });
     }
