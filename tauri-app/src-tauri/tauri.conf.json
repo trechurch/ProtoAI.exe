@@ -15,7 +15,8 @@
         "title": "protoai",
         "width": 1280,
         "height": 900,
-        "backgroundColor": "#0d0d0d"
+        "backgroundColor": "#0d0d0d",
+        "devtools": true
       }
     ],
     "security": {

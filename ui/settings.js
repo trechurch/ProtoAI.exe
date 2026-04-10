@@ -356,61 +356,46 @@
     }
   }
 
-  async function completeWizard() {
-    const nextBtn = qs("#wizardNextBtn");
-    const skipBtn = qs("#wizardSkipBtn");
-    const backBtn = qs("#wizardBackBtn");
-
-    // Disable all wizard buttons immediately to prevent double-click
-    if (nextBtn) { nextBtn.disabled = true; nextBtn.textContent = "Launching..."; }
-    if (skipBtn) skipBtn.disabled = true;
-    if (backBtn) backBtn.disabled = true;
-
+  function completeWizard() {
+    // READ SETTINGS SYNCHRONOUSLY — no async calls before closing the wizard
     _pendingSettings = readAllFromUI();
     _pendingSettings.firstRunCompleted = true;
-
-    // Mark first-run complete — non-blocking, sidecar may not be ready
-    try {
-      await window.__TAURI__.core.invoke("settings_complete_first_run", {});
-    } catch (_) {}
-
-    // Save remaining settings — fire-and-forget, don't block the UI
-    const settingsToSave = { ..._pendingSettings };
-    delete settingsToSave.version;
-
-    try {
-      for (const key of Object.keys(settingsToSave)) {
-        if (key === "version" || key === "firstRunCompleted") continue;
-        try {
-          await window.__TAURI__.core.invoke("settings_set", {
-            key,
-            value: settingsToSave[key]
-          });
-        } catch (_) {
-          // Individual key save failures are non-critical
-        }
-      }
-    } catch (_) {
-      // If the entire settings save fails, continue anyway
-      console.warn("[Wizard] Settings save failed — continuing with first-run");
-    }
-
-    _settings = settingsToSave;
-    _settings.firstRunCompleted = true;
+    _settings = _pendingSettings;
     _pendingSettings = null;
 
-    try { applySettingsToApp(); } catch (_) {}
-
-    // Close wizard overlay immediately
+    // CLOSE THE WIZARD FIRST — this must happen before any network/IPC call
     closeFirstRunWizard();
 
-    // Proceed to main app — non-blocking
-    if (typeof init === "function") {
-      try {
-        init();
-      } catch (err) {
-        console.error("[Wizard] init() failed:", err);
-      }
+    // Apply engine selects synchronously
+    try { applySettingsToApp(); } catch (_) {}
+
+    // Save settings asynchronously in the background
+    if (window.__TAURI__?.core?.invoke) {
+      // Fire-and-forget: save first_run flag
+      window.__TAURI__.core.invoke("settings_complete_first_run", {}).catch(() => {});
+
+      // Save each key in background (non-blocking — UI is already live)
+      setTimeout(async () => {
+        for (const key of Object.keys(_settings)) {
+          if (key === "version" || key === "firstRunCompleted") continue;
+          try {
+            await window.__TAURI__.core.invoke("settings_set", {
+              key, value: _settings[key]
+            });
+          } catch (_) {}
+        }
+        // Now that settings are saved, init the main app
+        if (typeof init === "function") {
+          try { init(); } catch (_) {}
+        }
+      }, 100);
+    } else {
+      // No Tauri — just init
+      setTimeout(() => {
+        if (typeof init === "function") {
+          try { init(); } catch (_) {}
+        }
+      }, 100);
     }
   }
 
