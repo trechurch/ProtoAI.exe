@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "firstRunCompleted": true,
+  "apiKeys": {
+    "anthropic": "",
+    "openai": "",
+    "openrouter": ""
+  },
+  "models": {
+    "defaults": {
+      "coding": "nvidia/nemotron-3-super-120b-a12b:free",
+      "default": "nvidia/nemotron-3-super-120b-a12b:free"
+    },
+    "enabled": [],
+    "failoverList": []
+  },
+  "profiles": {
+    "defaultProfile": "default",
+    "fallbackProfile": "analysis"
+  },
+  "ingestion": {
+    "maxDepth": 4,
+    "maxFileSizeMB": 10,
+    "supportedExtensions": [".js", ".ts", ".py", ".rs", ".go", ".java", ".md", ".txt", ".json", ".html", ".css"]
+  },
+  "backend": {
+    "timeoutMs": 30000,
+    "retryCount": 3,
+    "fallbackBehavior": "http"
+  },
+  "spellcheck": {
+    "enabled": true
+  },
+  "advanced": {
+    "debugLogging": false
+  }
+}

@@ -11,15 +11,10 @@ const DEFAULTS = {
     enabled: [
       "anthropic/claude-3.5-sonnet",
       "anthropic/claude-opus-4.1",
-      "openai/gpt-4o-mini",
-      "qwen/qwen3.6-plus:free",
+      "openai/gpt-4o-mini"
     ],
-    defaults: { default: "qwen/qwen3.6-plus:free", coding: "anthropic/claude-3.5-sonnet" },
-    failoverList: [
-      "qwen/qwen3.6-plus:free",
-      "google/gemma-7b-it:free",
-      "mistral/mistral-small:free",
-    ],
+    defaults: { default: "anthropic/claude-3.5-sonnet", coding: "anthropic/claude-3.5-sonnet" },
+    failoverList: [],
   },
   profiles: { defaultProfile: "default", fallbackProfile: "analysis" },
   ingestion: {
@@ -62,13 +57,16 @@ class SettingsManager {
         const raw = fs.readFileSync(this.filePath, "utf8");
         const parsed = JSON.parse(raw);
         this._settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), parsed);
+        console.error("[DEBUG] SettingsManager loaded settings from file:", this.filePath);
       } else {
         this._settings = JSON.parse(JSON.stringify(DEFAULTS));
+        console.error("[DEBUG] SettingsManager file not found, using defaults:", this.filePath);
       }
     } catch (err) {
       console.error("[SettingsManager] Failed to load, using defaults:", err.message);
       this._settings = JSON.parse(JSON.stringify(DEFAULTS));
     }
+    console.error("[DEBUG] SettingsManager.load returning:", this._settings);
     return this._settings;
   }
 
@@ -101,6 +99,7 @@ class SettingsManager {
       obj = obj[parts[i]];
     }
     obj[parts[parts.length - 1]] = value;
+    console.error("[DEBUG] SettingsManager set: keyPath=", keyPath, "value=", typeof value === "string" ? value.substring(0, 10) + "..." : value);
     this.save();
   }
 

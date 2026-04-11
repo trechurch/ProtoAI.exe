@@ -46,10 +46,11 @@ const p = profiles[profile];
 // -------------------------------
 // Prefer SettingsManager (user-configured), fall back to secret.key
 let apiKey = "";
+let settings = null;
 const settingsPath = paths.data("settings.json");
 if (fs.existsSync(settingsPath)) {
     try {
-        const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+        settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
         if (settings?.apiKeys?.openrouter) {
             apiKey = settings.apiKeys.openrouter.trim();
         }
@@ -70,6 +71,7 @@ if (!apiKey) {
     console.error("No API key configured. Set your OpenRouter or Anthropic key in Settings (Ctrl+Shift+S), or create data/secret.key");
     process.exit(1);
 }
+console.error("[DEBUG] API key loaded: ", apiKey ? apiKey.substring(0, 12) + "..." : "(empty)");
 
 // -------------------------------
 // LOAD MEMORY
@@ -148,7 +150,19 @@ function buildMessages() {
 // -------------------------------
 // OPENROUTER REQUEST
 // -------------------------------
+
+// Streaming flag: set by caller if they want SSE chunks written to stdout
+let streamingEnabled = false;
+for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--stream") streamingEnabled = true;
+}
+
 function sendRequest(model, callback) {
+    if (streamingEnabled) {
+        sendRequestStream(model, callback);
+        return;
+    }
+
     const payload = JSON.stringify({
         model,
         temperature: p.temperature,
@@ -197,6 +211,85 @@ function sendRequest(model, callback) {
 
     req.setTimeout(30000, () => {
         console.error(`OpenRouter timeout for ${model} (30s)`);
+        req.destroy();
+        callback(new Error("Request timed out"), null);
+    });
+
+    req.write(payload);
+    req.end();
+}
+
+// SSE streaming variant — writes STREAM_CHUNK: lines to stdout as tokens arrive,
+// then calls callback(null, fullReply) when done.
+function sendRequestStream(model, callback) {
+    const payload = JSON.stringify({
+        model,
+        temperature: p.temperature,
+        max_tokens: p.max_tokens,
+        stream: true,
+        messages: buildMessages()
+    });
+
+    const options = {
+        hostname: "openrouter.ai",
+        path: "/api/v1/chat/completions",
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Length": Buffer.byteLength(payload)
+        }
+    };
+
+    const req = https.request(options, res => {
+        if (res.statusCode >= 400) {
+            let errData = "";
+            res.on("data", c => errData += c);
+            res.on("end", () => {
+                const err = new Error(`HTTP ${res.statusCode}`);
+                err.statusCode = res.statusCode;
+                callback(err, null);
+            });
+            return;
+        }
+
+        let fullReply = "";
+        let buffer = "";
+
+        res.on("data", chunk => {
+            buffer += chunk.toString();
+            const lines = buffer.split("\n");
+            buffer = lines.pop(); // keep incomplete last line
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith("data: ")) continue;
+                const data = trimmed.slice(6);
+                if (data === "[DONE]") continue;
+                try {
+                    const json = JSON.parse(data);
+                    const token = json.choices?.[0]?.delta?.content || "";
+                    if (token) {
+                        fullReply += token;
+                        // Write chunk to stdout for parent process to forward
+                        process.stdout.write("STREAM_CHUNK:" + token + "\n");
+                    }
+                } catch (_) {}
+            }
+        });
+
+        res.on("end", () => {
+            callback(null, fullReply || null);
+        });
+    });
+
+    req.on("error", err => {
+        console.error(`OpenRouter stream error for ${model}: ${err.message}`);
+        callback(err, null);
+    });
+
+    req.setTimeout(120000, () => {
+        console.error(`OpenRouter stream timeout for ${model} (120s)`);
         req.destroy();
         callback(new Error("Request timed out"), null);
     });

@@ -119,8 +119,8 @@ function handleHistoryIPC(payload) {
 }
 
 // chat: run SendMessageWorkflow
-async function handleChatIPC(payload) {
-  const { project, message, profile, engine } = payload || {};
+async function handleChatIPC(payload, requestId) {
+  const { project, message, profile, engine, stream } = payload || {};
 
   if (!project) return { ok: false, error: "Missing 'project' in payload for chat" };
   if (!message) return { ok: false, error: "Missing 'message' in payload for chat" };
@@ -131,17 +131,40 @@ async function handleChatIPC(payload) {
   log("Project:", project);
   log("Profile:", profile);
   log("Engine:", engine);
+  log("Stream:", !!stream);
   log("Message:", message);
   log("==============================\n");
 
+  // onChunk: writes stream chunks to stdout as partial IPC messages.
+  // The Rust reader detects type="stream" and emits Tauri events instead of
+  // resolving the pending sender (which is waiting for type="chat" final response).
+  let fullStreamedReply = "";
+  const onChunk = stream ? (token) => {
+    fullStreamedReply += token;
+    writeResponse({ id: requestId, ok: true, type: "stream", chunk: token });
+  } : null;
+
   try {
     const workflow = registry.get("SendMessageWorkflow");
-    const result = await workflow.run({ project, message, profile, engine });
+    const result = await workflow.run({ project, message, profile, engine, onChunk });
+    log("[DEBUG] SendMessageWorkflow result:", result);
 
     if (result.status === "error") {
       return { ok: false, ...result.data };
     }
-    return { response: result.data.reply };
+
+    // In streaming mode, return the reconstructed full reply for history saving
+    const reply = result.data.streaming ? fullStreamedReply : result.data.reply;
+
+    if (stream && fullStreamedReply) {
+      // Save history here since workflow skipped it in streaming mode
+      const FsProjectRepository = require("./access/fs/FsProjectRepository");
+      const projectRepo = new FsProjectRepository();
+      projectRepo.appendToHistory(project, { timestamp: Date.now(), role: "user", message });
+      projectRepo.appendToHistory(project, { timestamp: Date.now(), role: "assistant", message: fullStreamedReply });
+    }
+
+    return { response: reply };
   } catch (err) {
     log("❌ Chat workflow crashed:", err);
     return { ok: false, error: "Chat workflow crashed", detail: String(err) };
@@ -314,7 +337,7 @@ async function dispatchMessage(msg) {
     case "history":
       result = handleHistoryIPC(payload); break;
     case "chat":
-      result = await handleChatIPC(payload); break;
+      result = await handleChatIPC(payload, id); break;
     case "upload":
       result = handleUploadIPC(payload); break;
     case "ingest":
@@ -408,7 +431,7 @@ async function processQueue() {
 
 process.stdin.on("end", () => {
   log("📥 stdin ended — shutting down IPC server");
-  process.exit(0);
+  // Keep the server alive for subsequent messages
 });
 
 process.on("SIGINT", () => {

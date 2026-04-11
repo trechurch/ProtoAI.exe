@@ -39,6 +39,7 @@
   async function loadSettings() {
     try {
       _settings = await callTauri("settings_get", {});
+      console.error("[Settings] Loaded settings from backend:", _settings);
       return _settings;
     } catch (e) {
       console.error("[Settings] Failed to load settings:", e);
@@ -50,6 +51,16 @@
   async function saveSettings() {
     try {
       _pendingSettings = readAllFromUI();
+      // Log masked pending settings for debugging
+      const masked = JSON.parse(JSON.stringify(_pendingSettings));
+      if (masked.apiKeys) {
+        for (const provider of Object.keys(masked.apiKeys)) {
+          if (masked.apiKeys[provider]) {
+            masked.apiKeys[provider] = masked.apiKeys[provider].substring(0, 8) + "...";
+          }
+        }
+      }
+      console.error("[Settings] Saving settings:", masked);
       for (const key of Object.keys(_pendingSettings)) {
         if (key === "version") continue;
         await callTauri("settings_set", { key, value: _pendingSettings[key] });
@@ -85,12 +96,12 @@
         openrouter: getWizKey("apiKey-openrouter") || getMainKey("apiKey-openrouter"),
       },
       models: {
-        enabled: qsa(".model-cb:checked").map(cb => cb.value),
+        enabled: Array.from(qsa(".model-cb:checked")).map(cb => cb.value),
         defaults: {
           default: qs("#defaultModelSelect")?.value || "qwen/qwen3.6-plus:free",
           coding: qs("#codingModelSelect")?.value || "anthropic/claude-3.5-sonnet",
         },
-        failoverList: qsa(".failover-cb:checked").map(cb => cb.value),
+        failoverList: Array.from(qsa(".failover-cb:checked")).map(cb => cb.value),
       },
       profiles: {
         defaultProfile: qs("#defaultProfile")?.value || "default",
@@ -99,7 +110,7 @@
       ingestion: {
         maxDepth: Math.max(1, Math.min(10, parseInt(qs("#maxDepth")?.value || "4", 10) || 4)),
         maxFileSizeMB: Math.max(1, Math.min(100, parseInt(qs("#maxFileSizeMB")?.value || "10", 10) || 10)),
-        supportedExtensions: qsa(".ext-cb:checked").map(cb => cb.value),
+        supportedExtensions: Array.from(qsa(".ext-cb:checked")).map(cb => cb.value),
       },
       backend: {
         timeoutMs: Math.max(5000, Math.min(120000, parseInt(qs("#timeoutMs")?.value || "30000", 10) || 30000)),
@@ -118,23 +129,55 @@
     if (!s) return;
     // API Keys
     const k = s.apiKeys || {};
-    if (mainInput("apiKey-anthropic")) mainInput("apiKey-anthropic").value = k.anthropic || "";
-    if (mainInput("apiKey-openai")) mainInput("apiKey-openai").value = k.openai || "";
-    if (mainInput("apiKey-openrouter")) mainInput("apiKey-openrouter").value = k.openrouter || "";
+    if (mainInput("apiKey-anthropic")) {
+      // For password fields, we need to be careful about when we set the value
+      mainInput("apiKey-anthropic").value = k.anthropic || "";
+      // Add a visual indicator that a key is present
+      const anthropicKeyIndicator = qs("#apiKey-anthropic-indicator");
+      if (anthropicKeyIndicator) {
+        anthropicKeyIndicator.textContent = k.anthropic ? "● Key is set" : "○ No key";
+        anthropicKeyIndicator.style.color = k.anthropic ? "#4ade80" : "#f87171";
+      }
+    }
+    if (mainInput("apiKey-openai")) {
+      mainInput("apiKey-openai").value = k.openai || "";
+      const openaiKeyIndicator = qs("#apiKey-openai-indicator");
+      if (openaiKeyIndicator) {
+        openaiKeyIndicator.textContent = k.openai ? "● Key is set" : "○ No key";
+        openaiKeyIndicator.style.color = k.openai ? "#4ade80" : "#f87171";
+      }
+    }
+    if (mainInput("apiKey-openrouter")) {
+      mainInput("apiKey-openrouter").value = k.openrouter || "";
+      const openrouterKeyIndicator = qs("#apiKey-openrouter-indicator");
+      if (openrouterKeyIndicator) {
+        openrouterKeyIndicator.textContent = k.openrouter ? "● Key is set" : "○ No key";
+        openrouterKeyIndicator.style.color = k.openrouter ? "#4ade80" : "#f87171";
+      }
+    }
     if (wizInput("apiKey-anthropic")) wizInput("apiKey-anthropic").value = k.anthropic || "";
     if (wizInput("apiKey-openai")) wizInput("apiKey-openai").value = k.openai || "";
     if (wizInput("apiKey-openrouter")) wizInput("apiKey-openrouter").value = k.openrouter || "";
 
     // Models
     const enabled = new Set((s.models?.enabled) || []);
-    const modelDefs = [
-      "anthropic/claude-3.5-sonnet", "anthropic/claude-opus-4.1",
-      "openai/gpt-4o-mini", "qwen/qwen3.6-plus:free",
-    ];
+    // Build model list from enabled models, with fallback to defaults if none enabled
+    let modelList = (s.models?.enabled || []).filter(Boolean);
+    if (modelList.length === 0) {
+      modelList = [
+        s.models?.defaults?.coding || "nvidia/nemotron-3-super-120b-a12b:free",
+        s.models?.defaults?.default || "nvidia/nemotron-3-super-120b-a12b:free",
+        "nvidia/nemotron-3-nano-30b-a3b:free",
+        "openai/gpt-oss-120b:free"
+      ].filter(Boolean);
+    }
+    // Remove duplicates while preserving order
+    modelList = [...new Set(modelList)];
+
     const listDiv = qs("#modelList");
     if (listDiv) {
       listDiv.innerHTML = "";
-      modelDefs.forEach(m => {
+      modelList.forEach(m => {
         const lbl = document.createElement("label");
         lbl.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;color:var(--text,#ccc);";
         lbl.innerHTML = `<input type="checkbox" class="model-cb" value="${m}" ${enabled.has(m) ? "checked" : ""} /> ${m}`;
@@ -142,28 +185,29 @@
       });
     }
     if (qs("#defaultModelSelect")) {
-      qs("#defaultModelSelect").innerHTML = modelDefs.map(m =>
+      qs("#defaultModelSelect").innerHTML = modelList.map(m =>
         `<option value="${m}" ${(s.models?.defaults?.default) === m ? "selected" : ""}>${m}</option>`
       ).join("");
     }
     if (qs("#codingModelSelect")) {
-      qs("#codingModelSelect").innerHTML = modelDefs.map(m =>
+      qs("#codingModelSelect").innerHTML = modelList.map(m =>
         `<option value="${m}" ${(s.models?.defaults?.coding) === m ? "selected" : ""}>${m}</option>`
       ).join("");
     }
     // Failover list
-    const failoverModels = [
-      "qwen/qwen3.6-plus:free",
-      "qwen/qwen-2-7b-instruct:free",
-      "openai/gpt-4o-mini",
-      "anthropic/claude-3.5-sonnet",
-    ];
+    const failoverModels = (s.models?.failoverList || []).filter(Boolean);
     const failoverDiv = qs("#failoverCheckboxes");
     if (failoverDiv) {
       failoverDiv.innerHTML = "";
       failoverDiv.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;";
       const failoverSet = new Set(s.models?.failoverList || []);
-      failoverModels.forEach(m => {
+      // Always include at least the defaults if list is empty
+      const modelsToShow = failoverModels.length > 0 ? failoverModels : [
+        s.models?.defaults?.coding || "anthropic/claude-3.5-sonnet",
+        s.models?.defaults?.default || "anthropic/claude-3.5-sonnet",
+        "openai/gpt-4o-mini"
+      ];
+      modelsToShow.forEach(m => {
         const lbl = document.createElement("label");
         lbl.style.cssText = "font-size:12px;color:#999;display:flex;align-items:center;gap:2px;";
         lbl.innerHTML = `<input type="checkbox" class="failover-cb" value="${m}" ${failoverSet.has(m) ? "checked" : ""} /> ${m}`;
@@ -193,7 +237,7 @@
     if (side) allSelects.push(side);
 
     const enabled = new Set((_settings?.models?.enabled) || []);
-    const fallbacks = ["anthropic/claude-3.5-sonnet", "anthropic/claude-opus-4.1", "openai/gpt-4o-mini", "qwen/qwen3.6-plus:free"];
+    const fallbacks = ["nvidia/nemotron-3-super-120b-a12b:free", "nvidia/nemotron-3-nano-30b-a3b:free", "openai/gpt-oss-120b:free"];
     const models = enabled.size > 0 ? [...enabled] : fallbacks;
 
     allSelects.forEach(sel => {
@@ -304,19 +348,25 @@
   // ---------------------------------------------------------------------------
   // First-Run Wizard
   // ---------------------------------------------------------------------------
-  let _wizardStep = 1;
+  let _wizardStep = 0; // 0 = choice screen, 1-3 = wizard steps
   const WIZARD_TOTAL_STEPS = 3;
 
   function openFirstRunWizard() {
     const overlay = qs("#wizardOverlay");
     if (!overlay) return;
-    _wizardStep = 1;
+    _wizardStep = 0;
     overlay.classList.remove("hidden");
     updateWizardStep();
     loadSettings().catch(() => { _settings = {}; }).then(s => {
       _settings = s || {};
       populateUI(s || _settings);
     });
+
+    // Wire choice buttons
+    const chooseManual = qs("#wizardChooseManual");
+    const chooseSetup  = qs("#wizardChooseSetup");
+    if (chooseManual) chooseManual.onclick = () => completeWizard();
+    if (chooseSetup)  chooseSetup.onclick  = () => { _wizardStep = 1; updateWizardStep(); };
   }
 
   function closeFirstRunWizard() {
@@ -326,18 +376,27 @@
 
   function updateWizardStep() {
     qsa(".wizard-step").forEach(el => el.classList.remove("active"));
-    const step = qs(`#wizardStep${_wizardStep}`);
+    const step = qs(_wizardStep === 0 ? "#wizardStep0" : `#wizardStep${_wizardStep}`);
     if (step) step.classList.add("active");
-    qsa(".wizard-dot").forEach((d, i) => {
-      d.classList.toggle("active", i === _wizardStep - 1);
-    });
-    const backBtn = qs("#wizardBackBtn");
-    if (backBtn) backBtn.style.visibility = _wizardStep === 1 ? "hidden" : "visible";
-    const nextBtn = qs("#wizardNextBtn");
-    if (nextBtn) nextBtn.textContent = _wizardStep === WIZARD_TOTAL_STEPS ? "Launch ProtoAI" : "Next";
-    // Show/hide skip button — only skip on step 1-2, not step 3
-    const skipBtn = qs("#wizardSkipBtn");
-    if (skipBtn) skipBtn.style.display = _wizardStep === WIZARD_TOTAL_STEPS ? "none" : "";
+
+    // Choice screen hides the progress dots and footer nav
+    const onChoiceScreen = _wizardStep === 0;
+    const dots = qs("#wizardDots");
+    const footer = qs("#wizardFooter");
+    if (dots)   dots.style.display   = onChoiceScreen ? "none" : "";
+    if (footer) footer.style.display = onChoiceScreen ? "none" : "";
+
+    if (!onChoiceScreen) {
+      qsa(".wizard-dot").forEach((d, i) => {
+        d.classList.toggle("active", i === _wizardStep - 1);
+      });
+      const backBtn = qs("#wizardBackBtn");
+      if (backBtn) backBtn.style.visibility = _wizardStep === 1 ? "hidden" : "visible";
+      const nextBtn = qs("#wizardNextBtn");
+      if (nextBtn) nextBtn.textContent = _wizardStep === WIZARD_TOTAL_STEPS ? "Launch ProtoAI" : "Next";
+      const skipBtn = qs("#wizardSkipBtn");
+      if (skipBtn) skipBtn.style.display = _wizardStep === WIZARD_TOTAL_STEPS ? "none" : "";
+    }
   }
 
   function wizardNext() {
@@ -516,6 +575,45 @@
         reader.readAsText(f);
       };
       input.click();
+    });
+
+    // Model import handler
+    const modelImportBtn = qs("#modelImportBtn");
+    if (modelImportBtn) modelImportBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const textarea = qs("#modelImportList");
+      if (!textarea) return;
+      const raw = textarea.value.trim();
+      if (!raw) {
+        qs("#modelImportStatus").textContent = "No models to import";
+        return;
+      }
+      // Split by newline or comma, trim, filter empty
+      const lines = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+      // Deduplicate while preserving order
+      const models = [...new Set(lines)];
+      // Update settings
+      if (_settings) {
+        _settings.models.enabled = models;
+        // Update failover list - keep existing failover models or use first 2 imported as failover
+        const existingFailover = _settings.models.failoverList || [];
+        _settings.models.failoverList = existingFailover.length > 0 ? existingFailover : models.slice(0, Math.min(2, models.length));
+        // Update defaults if not set
+        if (!_settings.models.defaults?.default) _settings.models.defaults.default = models[0] || "";
+        if (!_settings.models.defaults?.coding) _settings.models.defaults.coding = models[0] || "";
+        // Update UI to reflect changes
+        populateUI(_settings);
+        applySettingsToApp();
+        qs("#modelImportStatus").textContent = `Imported ${models.length} models`;
+        if (typeof showToast === "function") showToast(`Imported ${models.length} models`);
+        // Save to backend
+        for (const key of Object.keys(_settings)) {
+          if (key === "version") continue;
+          callTauri("settings_set", { key, value: _settings[key] }).catch(() => {});
+        }
+      } else {
+        qs("#modelImportStatus").textContent = "Settings not loaded yet";
+      }
     });
 
     // Click outside panel to close (but not clicks on the panel itself)

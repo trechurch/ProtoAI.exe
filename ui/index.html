@@ -206,6 +206,7 @@
             <div class="input-with-actions">
               <input type="password" id="apiKey-anthropic" class="settings-input" placeholder="sk-ant-..." autocomplete="off" />
               <button class="test-key-btn" data-provider="anthropic">Test</button>
+              <span id="apiKey-anthropic-indicator" style="margin-left:8px;font-size:12px;"></span>
             </div>
           </div>
           <div class="setting-row">
@@ -213,6 +214,7 @@
             <div class="input-with-actions">
               <input type="password" id="apiKey-openai" class="settings-input" placeholder="sk-..." autocomplete="off" />
               <button class="test-key-btn" data-provider="openai">Test</button>
+              <span id="apiKey-openai-indicator" style="margin-left:8px;font-size:12px;"></span>
             </div>
           </div>
           <div class="setting-row">
@@ -239,6 +241,14 @@
           <div class="setting-row" style="flex-direction:column;align-items:flex-start;margin-top:16px;">
             <label style="margin-bottom:6px;">Failover Models <span style="color:#666;font-size:11px;font-weight:normal;">(tried in order on rate limit / server error)</span></label>
             <div id="failoverCheckboxes"></div>
+          </div>
+          <div class="setting-row" style="flex-direction:column;align-items:flex-start;margin-top:16px;">
+            <label style="margin-bottom:6px;">Import Model List</label>
+            <div style="display:flex;gap:8px;align-items:flex-start;">
+              <textarea id="modelImportList" rows="4" style="flex:1;min-width:200px;font-family:monospace;font-size:13px;padding:8px;" placeholder="One model per line or comma-separated&#10;e.g.&#10;nvidia/nemotron-3-super-120b-a12b:free&#10;nvidia/nemotron-3-nano-30b-a3b:free&#10;openai/gpt-oss-120b:free"></textarea>
+              <button id="modelImportBtn" class="primary">Import List</button>
+            </div>
+            <div id="modelImportStatus" style="margin-top:8px;font-size:12px;color:#888;"></div>
           </div>
         </div>
 
@@ -322,13 +332,26 @@
   <!-- FIRST-RUN WIZARD -->
   <div id="wizardOverlay" class="wizard-overlay hidden">
     <div class="wizard-panel">
-      <div class="wizard-dots">
+
+      <!-- Step 0: choice screen — shown before the stepped wizard -->
+      <div id="wizardStep0" class="wizard-step active">
+        <div class="wizard-icon">&#9733;</div>
+        <h2>Welcome to ProtoAI</h2>
+        <p>Would you like to run the setup wizard to configure your API keys and default model?</p>
+        <p style="font-size:12px;color:#888;">You can always configure these later via <b>Ctrl+Shift+S</b>.</p>
+        <div style="display:flex;gap:10px;margin-top:20px;">
+          <button id="wizardChooseManual" class="secondary" style="flex:1;">Skip — Set Up Manually</button>
+          <button id="wizardChooseSetup" class="primary" style="flex:1;">Run Setup Wizard</button>
+        </div>
+      </div>
+
+      <div class="wizard-dots" id="wizardDots" style="display:none;">
         <span class="wizard-dot active"></span>
         <span class="wizard-dot"></span>
         <span class="wizard-dot"></span>
       </div>
 
-      <div id="wizardStep1" class="wizard-step active">
+      <div id="wizardStep1" class="wizard-step">
         <div class="wizard-icon">&#9733;</div>
         <h2>Welcome to ProtoAI</h2>
         <p>Let's get you set up. You'll configure your API keys and pick a default model — and you can always change these later in Settings.</p>
@@ -367,7 +390,7 @@
         <p style="font-size:12px;color:#888;">Pro tip: attach folders with <b>Alt+F</b> or click &#128206; in the input bar.</p>
       </div>
 
-      <div class="wizard-footer">
+      <div class="wizard-footer" id="wizardFooter" style="display:none;">
         <button id="wizardBackBtn" class="secondary" style="visibility:hidden;">Back</button>
         <div style="flex:1;"></div>
         <button id="wizardSkipBtn" class="secondary">Skip</button>

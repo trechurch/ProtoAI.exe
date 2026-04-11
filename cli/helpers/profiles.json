@@ -1,11 +1,10 @@
 {
     "default": {
-        "model": "qwen/qwen3.6-plus:free",
+        "model": "nvidia/nemotron-3-super-120b-a12b:free",
         "fallback": [
-            "anthropic/claude-3-5-haiku",
-            "openai/gpt-4o-mini",
-            "qwen/qwen3.6-plus:free",
-            "qwen/qwen3.6-plus:free"
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "openai/gpt-oss-120b:free"
         ],
         "system": "You are a senior software engineer. Produce clean, modular, well-structured code with clear reasoning",
         "temperature": 0.7,
@@ -18,14 +17,13 @@
     },
 
     "coding": {
-        "model": "anthropic/claude-3.5-sonnet",
+        "model": "nvidia/nemotron-3-super-120b-a12b:free",
         "fallback": [
-            "anthropic/claude-3-5-haiku",
-            "qwen/qwen3.6-plus:free",
-            "qwen/qwen-2-7b-instruct:free",
-            "qwen/qwen3.6-plus:free"
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "openai/gpt-oss-120b:free"
         ],
-        "system": "You are a senior software engineer. Produce clean, modular, well-structured code with clear reasoning.",
+        "system": "You are a senior software engineer. Produve clean, modular, well-structured code with clear reasoning.",
         "temperature": 0.2,
         "max_tokens": 2048,
         "verbosity": "concise",
@@ -36,11 +34,11 @@
     },
 
     "analysis": {
-        "model": "anthropic/claude-3.5-sonnet",
+        "model": "nvidia/nemotron-3-super-120b-a12b:free",
         "fallback": [
-            "anthropic/claude-3-5-haiku",
-            "openai/gpt-4o-mini",
-            "qwen/qwen3.6-plus:free"
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "openai/gpt-oss-120b:free"
         ],
         "system": "You are an analytical assistant. Break down problems step-by-step with clarity and precision.",
         "temperature": 0.1,
@@ -53,13 +51,11 @@
     },
 
     "creative": {
-        "model": "anthropic/claude-3.5-sonnet",
+        "model": "nvidia/nemotron-3-super-120b-a12b:free",
         "fallback": [
-            "anthropic/claude-3-5-haiku",
-            "qwen/qwen-2-7b-instruct:free",
-            "qwen/qwen3.6-plus:free",
-            "openai/gpt-4o-mini",
-            "qwen/qwen3.6-plus:free"
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "openai/gpt-oss-120b:free"
         ],
         "system": "You are a creative assistant. Generate imaginative, expressive, and original content.",
         "temperature": 0.9,
@@ -72,11 +68,11 @@
     },
 
     "refactor": {
-        "model": "anthropic/claude-3.5-sonnet",
+        "model": "nvidia/nemotron-3-super-120b-a12b:free",
         "fallback": [
-            "anthropic/claude-3-5-haiku",
-            "openai/gpt-4o-mini",
-            "qwen/qwen3.6-plus:free"
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "openai/gpt-oss-120b:free"
         ],
         "system": "You are a code refactoring engine. Improve structure, readability, and maintainability without changing behavior.",
         "temperature": 0.15,
@@ -89,11 +85,11 @@
     },
 
     "explain": {
-        "model": "anthropic/claude-3.5-sonnet",
+        "model": "nvidia/nemotron-3-super-120b-a12b:free",
         "fallback": [
-            "anthropic/claude-3-5-haiku",
-            "openai/gpt-4o-mini",
-            "qwen/qwen3.6-plus:free"
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "openai/gpt-oss-120b:free"
         ],
         "system": "You are an explainer. Break down complex topics into simple, intuitive explanations. Use examples and analogies when helpful.",
         "temperature": 0.4,
