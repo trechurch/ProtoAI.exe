@@ -160,6 +160,20 @@ impl EngineBridge {
         .await
     }
 
+    pub async fn chat_stream(
+        &self,
+        project: String,
+        profile: String,
+        engine: String,
+        message: String,
+    ) -> Result<serde_json::Value> {
+        self.send_request(
+            "chat",
+            serde_json::json!({ "project": project, "profile": profile, "engine": engine, "message": message, "stream": true }),
+        )
+        .await
+    }
+
     pub async fn upload(
         &self,
         project: String,
@@ -175,6 +189,18 @@ impl EngineBridge {
 
     pub async fn ingest(&self, project: String) -> Result<serde_json::Value> {
         self.send_request("ingest", serde_json::json!({ "project": project })).await
+    }
+
+    pub async fn image_gen(&self, text: String, project: String) -> Result<serde_json::Value> {
+        self.send_request(
+            "image_gen",
+            serde_json::json!({ "text": text, "project": project }),
+        )
+        .await
+    }
+
+    pub async fn deep_search(&self, query: String) -> Result<serde_json::Value> {
+        self.send_request("deep_search", serde_json::json!({ "query": query })).await
     }
 
     pub async fn qmd_index(
@@ -198,6 +224,14 @@ impl EngineBridge {
     }
 
     // Settings
+    // ── Generic IPC passthrough ──────────────────────────────
+    // Sends any message type + payload to the Node IPC server.
+    // Used for VFS and any future workflow types without
+    // dedicated Rust commands.
+    pub async fn ipc(&self, msg_type: String, payload: serde_json::Value) -> Result<serde_json::Value> {
+        self.send_request(&msg_type, payload).await
+    }
+
     pub async fn get_settings(&self) -> Result<serde_json::Value> {
         self.send_request("settings", serde_json::json!({ "action": "get" })).await
     }

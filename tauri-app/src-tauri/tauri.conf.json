@@ -4,7 +4,7 @@
   "version": "0.1.2",
   "identifier": "com.protoai.dev",
   "build": {
-    "frontendDist": "../../ui",
+    "frontendDist": "../ui",
     "beforeDevCommand": "",
     "beforeBuildCommand": ""
   },
@@ -41,7 +41,7 @@
       "binaries/node"
     ],
     "resources": [
-      "../../server/**/*"
+    "resources/server/**/*"
     ],
     "createUpdaterArtifacts": false
   },

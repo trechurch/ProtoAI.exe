@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tokio::sync::{Mutex, oneshot};
@@ -30,6 +30,17 @@ struct IpcResponse {
     error: Option<String>,
     #[serde(default)]
     detail: Option<String>,
+    // Present on streaming chunk messages — JSON key is "type"
+    #[serde(default, rename = "type")]
+    msg_type: Option<String>,
+    #[serde(default)]
+    chunk: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct StreamChunkEvent {
+    id: String,
+    chunk: String,
 }
 
 pub struct NodeProcessBackend {
@@ -43,33 +54,50 @@ impl NodeProcessBackend {
     pub async fn new(app: &AppHandle) -> Result<Self> {
         // Resolve the server directory. We prefer the resource-dir copy, but
         // fall back to a path relative to the executable (dev layout).
+        // ── server_dir resolution ─────────────────────────────
+        // Priority order:
+        //   1. Tauri resource_dir/server  (production — bundled resources)
+        //   2. src-tauri/resources/server (dev — source layout)
+        //   3. Walk up from exe           (fallback)
+        // ── end of server_dir resolution ─────────────────────
+
         let resource_server = app
             .path()
             .resource_dir()
             .map_err(|e| anyhow!("Failed to resolve resource dir: {}", e))?
             .join("server");
 
-        // In a dev build the resource dir contains _up_/_up_/server rather
-        // than server/ directly — walk up past _up_ segments to find it.
-        let server_dir = if resource_server.join("server-ipc.js").exists() {
+        let server_dir = if resource_server.join("server-ipc.cjs").exists() {
+            // Production: resources bundled by Tauri
             resource_server
         } else {
-            // Walk up from executable to find a sibling `server/` directory.
-            let exe = std::env::current_exe()
-                .map_err(|e| anyhow!("Cannot determine exe path: {}", e))?;
-            let mut candidate = exe.parent()
-                .ok_or_else(|| anyhow!("Cannot get exe parent dir"))?;
-            loop {
-                let try_path = candidate.join("server");
-                if try_path.join("server-ipc.js").exists() {
-                    break try_path;
+            // Dev: try src-tauri/resources/server relative to the manifest dir.
+            // CARGO_MANIFEST_DIR is set by cargo at compile time and always
+            // points to src-tauri/ regardless of where the exe ends up.
+            let dev_path = std::path::PathBuf::from(
+                env!("CARGO_MANIFEST_DIR")
+            ).join("resources").join("server");
+
+            if dev_path.join("server-ipc.cjs").exists() {
+                dev_path
+            } else {
+                // Last resort: walk up from exe
+                let exe = std::env::current_exe()
+                    .map_err(|e| anyhow!("Cannot determine exe path: {}", e))?;
+                let mut candidate = exe.parent()
+                    .ok_or_else(|| anyhow!("Cannot get exe parent dir"))?;
+                loop {
+                    let try_path = candidate.join("server");
+                    if try_path.join("server-ipc.cjs").exists() {
+                        break try_path;
+                    }
+                    candidate = candidate.parent()
+                        .ok_or_else(|| anyhow!("server-ipc.js not found in any ancestor of {}", exe.display()))?;
                 }
-                candidate = candidate.parent()
-                    .ok_or_else(|| anyhow!("server-ipc.js not found in any ancestor of {}", exe.display()))?;
             }
         };
 
-        let server_ipc = server_dir.join("server-ipc.js");
+        let server_ipc = server_dir.join("server-ipc.cjs");
         let script_path = server_ipc
             .to_str()
             .ok_or_else(|| anyhow!("Failed to convert script path to string"))?
@@ -77,8 +105,16 @@ impl NodeProcessBackend {
 
         // PROTOAI_ROOT tells paths.js where data/ lives (repo root, two levels
         // above the server/ directory).
+        // PROTOAI_ROOT must point to the repo root where data/ lives.
+        // server/ is at resources/server/ — so we need to go up:
+        //   resources/server/ -> resources/ -> src-tauri/ -> tauri-app/ -> protoai/ (repo root)
+        // In dev: server_dir = src-tauri/resources/server, root = src-tauri/../.. = tauri-app/..
+        // In prod: server_dir = resource_dir/server, root = same walk
         let protoai_root = server_dir
-            .parent()
+            .parent()                    // resources/  (or resource_dir/)
+            .and_then(|p| p.parent())    // src-tauri/  (or app bundle root)
+            .and_then(|p| p.parent())    // tauri-app/
+            .and_then(|p| p.parent())    // protoai/  (repo root — has data/)
             .unwrap_or(&server_dir)
             .to_str()
             .unwrap_or("")
@@ -93,7 +129,18 @@ impl NodeProcessBackend {
             .map_err(|e| anyhow!("Failed to find node sidecar: {}", e))?
             .arg(&script_path)
             .env("PROTOAI_ROOT", &protoai_root)
-            .env("NODE_PATH", server_dir.join("node_modules").to_str().unwrap_or(""))
+            .env("NODE_PATH", {
+                // Include all likely node_modules locations.
+                // The server's own node_modules is always first (highest priority).
+                let server_nm = server_dir.join("node_modules");
+                let root_nm   = std::path::PathBuf::from(&protoai_root).join("node_modules");
+                let app_nm    = std::path::PathBuf::from(&protoai_root).join("tauri-app").join("node_modules");
+                [
+                    server_nm.to_str().unwrap_or(""),
+                    root_nm.to_str().unwrap_or(""),
+                    app_nm.to_str().unwrap_or(""),
+                ].join(";")
+            })
             .spawn()
             .map_err(|e| anyhow!("Failed to spawn node sidecar: {}", e))?;
 
@@ -103,7 +150,7 @@ impl NodeProcessBackend {
         let (exit_tx, exit_rx) = oneshot::channel::<()>();
         let exit_tx_shared = Arc::new(Mutex::new(Some(exit_tx)));
 
-        Self::start_reader_loop(rx, pending.clone(), exit_tx_shared);
+        Self::start_reader_loop(rx, pending.clone(), exit_tx_shared, app.clone());
 
         Ok(NodeProcessBackend {
             child,
@@ -126,6 +173,7 @@ impl NodeProcessBackend {
         mut rx: tokio::sync::mpsc::Receiver<CommandEvent>,
         pending: Arc<Mutex<HashMap<String, oneshot::Sender<IpcResponse>>>>,
         exit_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+        app: AppHandle,
     ) {
         tokio::spawn(async move {
             while let Some(event) = rx.recv().await {
@@ -138,6 +186,17 @@ impl NodeProcessBackend {
                         }
                         match serde_json::from_str::<IpcResponse>(line) {
                             Ok(resp) => {
+                                // Stream chunk — emit as Tauri event, don't resolve pending sender
+                                if resp.msg_type.as_deref() == Some("stream") {
+                                    if let Some(chunk) = &resp.chunk {
+                                        let _ = app.emit("chat-stream", StreamChunkEvent {
+                                            id: resp.id.clone(),
+                                            chunk: chunk.clone(),
+                                        });
+                                    }
+                                    continue;
+                                }
+                                // Normal response — resolve pending sender
                                 let mut map = pending.lock().await;
                                 if let Some(tx) = map.remove(&resp.id) {
                                     let _ = tx.send(resp);
@@ -178,6 +237,8 @@ impl NodeProcessBackend {
                                 data: None,
                                 error: Some("Sidecar crashed".into()),
                                 detail: Some(format!("Process exited with code {:?}", payload.code)),
+                                msg_type: None,
+                                chunk: None,
                             });
                         }
                         // Notify the watchdog
@@ -214,13 +275,27 @@ impl NodeProcessBackend {
 
         let mut line = serde_json::to_string(&req)?;
         line.push('\n');
-        self.child
-            .write(line.as_bytes())
-            .map_err(|e| anyhow!("Failed to write to sidecar stdin: {}", e))?;
+
+        // Write to stdin. On failure remove the pending sender so it doesn't
+        // leak in the map waiting for a response that will never arrive.
+        if let Err(e) = self.child.write(line.as_bytes()) {
+            self.pending.lock().await.remove(&id);
+            return Err(anyhow!("Failed to write to sidecar stdin: {}", e));
+        }
 
         let resp_timeout = Self::timeout_for(msg_type);
-        let resp = timeout(resp_timeout, rx).await
-            .map_err(|_| anyhow!("Sidecar timed out after {:.0}s on '{msg_type}'", resp_timeout.as_secs_f64()))??;
+        let resp = match timeout(resp_timeout, rx).await {
+            Ok(Ok(r))  => r,
+            Ok(Err(_)) => {
+                // Channel closed — sidecar crashed, reader loop already cleaned up pending
+                return Err(anyhow!("Sidecar channel closed on '{}'", msg_type));
+            }
+            Err(_) => {
+                // Timeout — remove the orphaned sender to avoid memory leak
+                self.pending.lock().await.remove(&id);
+                return Err(anyhow!("Sidecar timed out after {:.0}s on '{}'", resp_timeout.as_secs_f64(), msg_type));
+            }
+        };
 
         if resp.ok {
             Ok(resp.data.unwrap_or(Value::Null))

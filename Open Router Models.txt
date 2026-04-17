@@ -1,0 +1,250 @@
+Open Router Models
+
+nvidia/nemotron-3-super-120b-a12b:free
+nvidia/nemotron-3-nano-30b-a3b:free
+openai/gpt-oss-120b:free
+nvidia/nemotron-nano-12b-v2-vl:free
+nvidia/nemotron-nano-9b-v2:free
+openai/gpt-oss-20b:free\
+openrouter/free
+xiaomi/mimo-v2-pro
+google/gemini-2.5-pro
+perplexity/sonar-reasoning-pro
+nvidia/nemotron-3-super-120b-a12b
+google/gemini-3.1-pro-preview-customtools
+google/gemini-3.1-pro-preview
+inflection/inflection-3-productivity
+perplexity/sonar-pro-search
+perplexity/sonar-pro
+deepseek/deepseek-prover-v2
+google/gemini-2.5-pro-preview
+google/gemini-2.5-pro-preview-05-06
+qwen/qwen3-coder-30b-a3b-instruct
+qwen/qwen3-coder-next
+qwen/qwen3-coder-flash
+qwen/qwen3-coder
+inception/mercury-coder
+x-ai/grok-code-fast-1
+mistralai/codestral-2508
+kwaipilot/kat-coder-pro-v2
+alfredpros/codellama-7b-instruct-solidity
+
+
+
+X liquid/lfm-2.5-1.2b-thinking:free
+X minimax/minimax-m2.5:free
+X openai/gpt-5-pro
+X openai/o3-pro
+X openai/gpt-5.2-pro
+X openai/gpt-5.4-pro
+X openai/o1-pro
+X google/gemini-3-pro-preview
+X google/gemma-4-31b-it:free
+X google/gemma-4-26b-a4b-it:free
+X qwen/qwen3-next-80b-a3b-instruct:free
+X google/gemini-2.5-pro-exp-03-25
+X google/gemini-pro-1.5-exp
+X google/gemini-pro-1.5h
+X deepcogito/cogito-v2-preview-llama-109b-moe
+X deepcogito/cogito-v2-preview-deepseek-671b
+X qwen/qwen3-coder:free
+X qwen/qwen2.5-coder-7b-instruct
+X mistralai/codestral-embed-2505
+X openai/gpt-5.1-codex-mini
+X arcee-ai/coder-large
+X qwen/qwen-2.5-coder-32b-instruct
+X agentica-org/deepcoder-14b-preview
+X qwen/qwen3-coder-plus
+X openai/gpt-5.1-codex-max
+X openai/gpt-5.1-codex
+X openai/gpt-5-codex
+X openai/gpt-5.3-codex
+X openai/gpt-5.2-codex
+X kwaipilot/kat-coder-pro
+X openai/codex-mini
+X agentica-org/deepcoder-14b-preview
+X open-r1/olympiccoder-32b
+X mistralai/codestral-2501
+X mistralai/codestral-mamba
+X bigcode/starcoder2-15b-instruct
+X meta-llama/codellama-70b-instruct
+X google/palm-2-codechat-bison-32k
+X meta-llama/codellama-34b-instruct
+X phind/phind-codellama-34b
+X google/palm-2-codechat-bison
+X arcee-ai/virtuoso-medium-v2X 
+X qwen/qwq-32b-preview
+X openai/o1-preview
+X openai/o1-preview-2024-09-12
+
+
+
+
+{ id: "nv-super", name: "nvidia/nemotron-3-super-120b-a12b:free", active: true, api: "openrouter", category: "research", cost: 0 },
+{ id: "nv-nano", name: "nvidia/nemotron-3-nano-30b-a3b:free", active: true, api: "openrouter", category: "coding", cost: 0 },
+{ id: "gpt-oss", name: "openai/gpt-oss-120b:free", active: true, api: "openrouter", category: "chat", cost: 0 }
+
+
+
+
+
+nvidia/nemotron-3-super-120b-a12b:free 
+nvidia/nemotron-3-nano-30b-a3b:free 
+openai/gpt-oss-120b:free
+nvidia/nemotron-nano-12b-v2-vl:free
+nvidia/nemotron-nano-9b-v2:free
+openai/gpt-oss-20b:free\
+openrouter/free
+xiaomi/mimo-v2-pro
+google/gemini-2.5-pro
+perplexity/sonar-reasoning-pro
+nvidia/nemotron-3-super-120b-a12b
+google/gemini-3.1-pro-preview-customtools
+google/gemini-3.1-pro-preview
+inflection/inflection-3-productivity
+perplexity/sonar-pro-search
+perplexity/sonar-pro
+deepseek/deepseek-prover-v2
+google/gemini-2.5-pro-preview
+google/gemini-2.5-pro-preview-05-06
+qwen/qwen3-coder-30b-a3b-instruct
+qwen/qwen3-coder-next
+qwen/qwen3-coder-flash
+qwen/qwen3-coder
+inception/mercury-coder
+x-ai/grok-code-fast-1
+mistralai/codestral-2508
+kwaipilot/kat-coder-pro-v2
+alfredpros/codellama-7b-instruct-solidity
+
+
+
+[music]
+google/lyria-3-pro-preview
+
+[Video]
+alibaba/wan-2.6
+bytedance/seedance-1-5-pro
+nvidia/nemotron-nano-12b-v2-vl:free
+openai/sora-2-pro
+google/veo-3.1
+
+
+[image]
+sourceful/riverflow-v2-pro
+sourceful/riverflow-v2-max-preview
+sourceful/riverflow-v2-standard-preview
+google/gemini-2.5-flash-image-preview
+google/gemini-3.1-flash-image-preview
+sourceful/riverflow-v2-fast-preview
+black-forest-labs/flux.2-pro
+google/gemini-3-pro-image-preview
+x-ai/grok-2-vision-1212
+x-ai/grok-vision-beta
+meta-llama/llama-3.2-90b-vision-instruct
+01-ai/yi-vision
+nousresearch/nous-hermes-2-vision-7b
+openai/gpt-4-vision-preview
+
+[Voice]
+openai/gpt-4o-audio-preview
+inflection/inflection-3-productivity
+deepcogito/cogito-v2-preview-llama-405b
+nousresearch/deephermes-3-mistral-24b-preview
+
+
+
+
+
+
+
+
+experimental
+deepseek/deepseek-v3.2-exp
+google/gemini-2.0-flash-exp
+google/gemini-exp-1121
+google/gemini-exp-1114
+google/gemini-flash-1.5-exp
+google/gemini-pro-1.5-exp
+
+
+
+
+
+
+
+cognitivecomputations/dolphin-mistral-24b-venice-edition:free
+
+
+
+
+
+
+
+
+/**
+ * SDOA Model Inventory & Mapping Module
+ */
+class ModelInventory {
+  constructor() {
+    this.models = [
+	{ id: "nv-super-free", name: "nvidia/nemotron-3-super-120b-a12b:free", active: true, api: "openrouter", category: "research", cost: 0 },
+	{ id: "nv-nano30-free", name: "nvidia/nemotron-3-nano-30b-a3b:free", active: true, api: "openrouter", category: "coding", cost: 0 },
+	{ id: "gpt-oss-120-free", name: "openai/gpt-oss-120b:free", active: true, api: "openrouter", category: "chat", cost: 0 },
+	{ id: "nv-nano12vl-free", name: "nvidia/nemotron-nano-12b-v2-vl:free", active: true, api: "openrouter", category: "chat", cost: 0 },
+	{ id: "nv-nano9-free", name: "nvidia/nemotron-nano-9b-v2:free", active: true, api: "openrouter", category: "chat", cost: 0 },
+	{ id: "gpt-oss-20-free", name: "openai/gpt-oss-20b:free", active: true, api: "openrouter", category: "chat", cost: 0 },
+	{ id: "openrouter-free", name: "openrouter/free", active: true, api: "openrouter", category: "router", cost: 0 },
+	{ id: "qwen-coder-30b", name: "qwen/qwen3-coder-30b-a3b-instruct", active: true, api: "openrouter", category: "coding", cost: 0 },
+	{ id: "qwen-coder-next", name: "qwen/qwen3-coder-next", active: true, api: "openrouter", category: "coding", cost: 0 },
+	{ id: "qwen-coder-flash", name: "qwen/qwen3-coder-flash", active: true, api: "openrouter", category: "coding", cost: 0 },
+	{ id: "qwen-coder", name: "qwen/qwen3-coder", active: true, api: "openrouter", category: "coding", cost: 0 },
+	{ id: "mercury-coder", name: "inception/mercury-coder", active: true, api: "openrouter", category: "coding", cost: 0 },	
+	{ id: "grok-code-fast", name: "x-ai/grok-code-fast-1", active: true, api: "openrouter", category: "coding", cost: 0 },
+	{ id: "codestral", name: "mistralai/codestral-2508", active: true, api: "openrouter", category: "coding", cost: 0 },
+	{ id: "kat-coder-pro", name: "kwaipilot/kat-coder-pro-v2", active: true, api: "openrouter", category: "coding", cost: 0 },
+	{ id: "solidity-llama", name: "alfredpros/codellama-7b-instruct-solidity", active: true, api: "openrouter", category: "coding", cost: 0 },
+	{ id: "deepseek-v32-exp", name: "deepseek/deepseek-v3.2-exp", active: true, api: "openrouter", category: "experimental", cost: 0 },
+	{ id: "gemini-20-flash-exp", name: "google/gemini-2.0-flash-exp", active: true, api: "openrouter", category: "experimental", cost: 0 },
+	{ id: "gemini-exp-1121", name: "google/gemini-exp-1121", active: true, api: "openrouter", category: "experimental", cost: 0 },
+	{ id: "gemini-exp-1114", name: "google/gemini-exp-1114", active: true, api: "openrouter", category: "experimental", cost: 0 },
+	{ id: "gemini-flash-15-exp", name: "google/gemini-flash-1.5-exp", active: true, api: "openrouter", category: "experimental", cost: 0 },
+	{ id: "gemini-pro-15-exp", name: "google/gemini-pro-1.5-exp", active: true, api: "openrouter", category: "experimental", cost: 0 },
+	{ id: "dolphin-venice-free", name: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free", active: true, api: "openrouter", category: "experimental", cost: 0 },
+	{ id: "lyria-pro", name: "google/lyria-3-pro-preview", active: true, api: "openrouter", category: "music", cost: 0 },
+	{ id: "wan-26", name: "alibaba/wan-2.6", active: true, api: "openrouter", category: "video", cost: 0 },
+	{ id: "seedance-pro", name: "bytedance/seedance-1-5-pro", active: true, api: "openrouter", category: "video", cost: 0 },
+	{ id: "nv-nano12vl-free2", name: "nvidia/nemotron-nano-12b-v2-vl:free", active: true, api: "openrouter", category: "video", cost: 0 },
+	{ id: "sora-2-pro", name: "openai/sora-2-pro", active: true, api: "openrouter", category: "video", cost: 0 },
+	{ id: "veo-31", name: "google/veo-3.1", active: true, api: "openrouter", category: "video", cost: 0 },
+	{ id: "riverflow-pro", name: "sourceful/riverflow-v2-pro", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "riverflow-max", name: "sourceful/riverflow-v2-max-preview", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "riverflow-std", name: "sourceful/riverflow-v2-standard-preview", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "gemini-25-img", name: "google/gemini-2.5-flash-image-preview", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "gemini-31-img", name: "google/gemini-3.1-flash-image-preview", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "riverflow-fast", name: "sourceful/riverflow-v2-fast-preview", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "flux2-pro", name: "black-forest-labs/flux.2-pro", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "gemini-3-img", name: "google/gemini-3-pro-image-preview", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "grok-vision-1212", name: "x-ai/grok-2-vision-1212", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "grok-vision-beta", name: "x-ai/grok-vision-beta", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "llama-90b-vision", name: "meta-llama/llama-3.2-90b-vision-instruct", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "yi-vision", name: "01-ai/yi-vision", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "nous-vision", name: "nousresearch/nous-hermes-2-vision-7b", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "gpt4-vision", name: "openai/gpt-4-vision-preview", active: true, api: "openrouter", category: "image", cost: 0 },
+	{ id: "gpt4o-audio", name: "openai/gpt-4o-audio-preview", active: true, api: "openrouter", category: "audio", cost: 0 },
+	{ id: "inflection-voice", name: "inflection/inflection-3-productivity", active: true, api: "openrouter", category: "audio", cost: 0 },
+	{ id: "cogito-405b", name: "deepcogito/cogito-v2-preview-llama-405b", active: true, api: "openrouter", category: "audio", cost: 0 },
+	{ id: "deephermes", name: "nousresearch/deephermes-3-mistral-24b-preview", active: true, api: "openrouter", category: "audio", cost: 0 },
+	{ id: "xiaomi-mimo-pro", name: "xiaomi/mimo-v2-pro", active: true, api: "openrouter", category: "chat", cost: 0 },
+	{ id: "gemini-25-pro", name: "google/gemini-2.5-pro", active: true, api: "openrouter", category: "chat", cost: 0 },	
+	{ id: "sonar-reason-pro", name: "perplexity/sonar-reasoning-pro", active: true, api: "openrouter", category: "research", cost: 0 },
+	{ id: "nv-super-paid", name: "nvidia/nemotron-3-super-120b-a12b", active: true, api: "openrouter", category: "research", cost: 0 },
+	{ id: "gemini-31-pro-tools", name: "google/gemini-3.1-pro-preview-customtools", active: true, api: "openrouter", category: "chat", cost: 0 },
+	{ id: "gemini-31-pro", name: "google/gemini-3.1-pro-preview", active: true, api: "openrouter", category: "chat", cost: 0 },
+	{ id: "inflection-3", name: "inflection/inflection-3-productivity", active: true, api: "openrouter", category: "assistant", cost: 0 },
+	{ id: "sonar-pro-search", name: "perplexity/sonar-pro-search", active: true, api: "openrouter", category: "research", cost: 0 },
+	{ id: "sonar-pro", name: "perplexity/sonar-pro", active: true, api: "openrouter", category: "chat", cost: 0 },
+	{ id: "deepseek-prover", name: "deepseek/deepseek-prover-v2", active: true, api: "openrouter", category: "reasoning", cost: 0 },
+	{ id: "gemini-25-pro-prev", name: "google/gemini-2.5-pro-preview", active: true, api: "openrouter", category: "chat", cost: 0 },
+	{ id: "gemini-25-pro-prev2", name: "google/gemini-2.5-pro-preview-05-06", active: true, api: "openrouter", category: "chat", cost: 0 },
+	

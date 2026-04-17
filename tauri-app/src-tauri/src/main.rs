@@ -5,20 +5,24 @@ mod engine_bridge;
 mod node_process_backend;
 
 use tauri::Manager;
-use engine_bridge::{EngineBridge, BridgeState};
 use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::CommandEvent;
+use engine_bridge::{EngineBridge, BridgeState};
 
-const _VERSION: &str = "1.0.0";
+// Managed state for the --setup-wizard launch flag
+pub struct LaunchFlags {
+    pub setup_wizard: bool,
+}
+
+#[tauri::command]
+fn get_launch_flags(flags: tauri::State<'_, LaunchFlags>) -> serde_json::Value {
+    serde_json::json!({ "setupWizard": flags.setup_wizard })
+}
 
 // ------------------------------------------------------------
 // One-shot Workflow Bridge (Tauri → Sidecar Node → tauri-entry.cjs)
 // ------------------------------------------------------------
 #[tauri::command]
 async fn run_workflow(app: tauri::AppHandle, name: String, payload: String) -> Result<String, String> {
-    use tauri::Manager;
-
-    // Locate the server directory — same logic as NodeProcessBackend::new().
     let resource_server = app.path().resource_dir()
         .map_err(|e| e.to_string())?
         .join("server");
@@ -27,110 +31,52 @@ async fn run_workflow(app: tauri::AppHandle, name: String, payload: String) -> R
         resource_server
     } else {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let mut candidate = exe.parent()
-            .ok_or_else(|| "Cannot get exe parent dir".to_string())?;
-        loop {
-            let try_path = candidate.join("server");
-            if try_path.join("tauri-entry.cjs").exists() {
-                break try_path;
-            }
-            candidate = candidate.parent()
-                .ok_or_else(|| format!("tauri-entry.cjs not found near {}", exe.display()))?;
-        }
+        exe.parent().unwrap().to_path_buf()
     };
 
-    let script_path = server_dir.join("tauri-entry.cjs");
-    let script_path_str = script_path.to_str()
-        .ok_or("Failed to convert script path to string")?;
+    let payload_json: serde_json::Value = serde_json::from_str(&payload).unwrap_or(serde_json::json!({}));
 
-    let protoai_root = server_dir.parent()
-        .unwrap_or(&server_dir)
-        .to_str().unwrap_or("").to_owned();
+    // Logic to execute the node sidecar via tauri-plugin-shell
+    let output = app.shell().command("node")
+        .args([
+            server_dir.join("tauri-entry.cjs").to_string_lossy().to_string(),
+            name,
+            payload_json.to_string(),
+        ])
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
 
-    println!("[Workflow] Running: {name}");
-
-    let sidecar_command = app.shell().sidecar("node")
-        .map_err(|e| format!("Failed to find node sidecar: {}", e))?
-        .arg(script_path_str)
-        .arg("--workflow").arg(&name)
-        .arg("--payload").arg(&payload)
-        .env("PROTOAI_ROOT", &protoai_root)
-        .env("NODE_PATH", server_dir.join("node_modules").to_str().unwrap_or(""));
-
-    let (mut rx, _child) = sidecar_command.spawn()
-        .map_err(|e| format!("Failed to spawn Sidecar process: {}", e))?;
-
-    // Collect output with a hard 30s timeout
-    let collect = async {
-        let mut stdout_parts: Vec<String> = Vec::new();
-        let mut stderr_parts: Vec<String> = Vec::new();
-        let mut exit_code: i32 = 0;
-
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(bytes) => {
-                    stdout_parts.push(String::from_utf8_lossy(&bytes).to_string());
-                }
-                CommandEvent::Stderr(bytes) => {
-                    stderr_parts.push(String::from_utf8_lossy(&bytes).to_string());
-                }
-                CommandEvent::Terminated(payload) => {
-                    exit_code = payload.code.unwrap_or(0);
-                    break;
-                }
-                CommandEvent::Error(e) => {
-                    return Err(format!("Sidecar error: {}", e));
-                }
-                _ => {}
-            }
-        }
-
-        Ok((stdout_parts.join(""), stderr_parts.join(""), exit_code))
-    };
-
-    let (stdout, stderr, exit_code) = tokio::time::timeout(
-        std::time::Duration::from_secs(30),
-        collect,
-    )
-    .await
-    .map_err(|_| "Workflow timed out after 30s".to_string())??;
-
-    if exit_code != 0 {
-        eprintln!("[Workflow] Failed (exit {}): {}", exit_code, stderr);
-        return Err(format!("Workflow error: {}", stderr));
-    }
-
-    println!("[Workflow] Success");
-    Ok(stdout)
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-// ------------------------------------------------------------
-// Tauri App Entry
-// ------------------------------------------------------------
 fn main() {
+    // Detect --setup-wizard flag from CLI args
+    let args: Vec<String> = std::env::args().collect();
+    let setup_wizard = args.contains(&"--setup-wizard".to_string());
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_opener::init())
+        .manage(LaunchFlags { setup_wizard })
+        .manage(BridgeState::new())
         .setup(|app| {
-            // Register BridgeState immediately — commands always have a State to deref.
-            // The inner Option starts as None and is populated once the sidecar inits.
-            let bridge_state = BridgeState::new();
-            app.manage(bridge_state.clone());
-
-            let app_handle = app.handle().clone();
-            let bridge_arc = bridge_state.inner.clone();
+            // 1. Get a cloned handle that is 'static and owned
+            let handle = app.handle().clone(); 
+            
+            // 2. Get the state and clone the inner Arc/Reference
+            let state = app.state::<BridgeState>().inner().clone();
 
             tauri::async_runtime::spawn(async move {
-                match EngineBridge::new(&app_handle).await {
+                // Now 'handle' and 'state' are owned by this block
+                match EngineBridge::new(&handle).await {
                     Ok(bridge) => {
-                        *bridge_arc.lock().await = Some(bridge);
-                        println!("[ProtoAI] EngineBridge initialized");
-                        // Watchdog monitors for crashes, auto-restarts up to 3×
-                        bridge_state.spawn_watchdog(app_handle);
+                        let mut inner = state.inner.lock().await;
+                        *inner = Some(bridge);
+                        drop(inner); // release lock before spawning watchdog
+                        state.spawn_watchdog(handle);
                     }
-                    Err(err) => {
-                        eprintln!("[ProtoAI] Failed to initialize EngineBridge: {err}");
-                        eprintln!("[ProtoAI] Use the Reconnect button in the UI to retry.");
+                    Err(e) => {
+                        eprintln!("[Setup] Failed to initialize EngineBridge: {}", e);
                     }
                 }
             });
@@ -138,17 +84,37 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // Global Root Commands
             run_workflow,
+            get_launch_flags,
+
+            // File System Governance
+            commands::get_project_dir,
+            commands::fs_read_file,
+            commands::fs_write_file,
+            commands::fs_rename,
+            commands::fs_copy,
+            commands::fs_unlink,
+            commands::fs_remove,
+            commands::fs_mkdir,
+            commands::fs_stat,
+            commands::fs_list_dir,
+
+            // Engine & Settings Management
             commands::ping,
             commands::get_status,
+            commands::engine_ipc,
             commands::engine_status,
             commands::engine_reconnect,
             commands::engine_projects,
             commands::engine_history,
             commands::engine_profiles,
             commands::engine_chat,
+            commands::engine_chat_stream,
             commands::engine_upload,
             commands::engine_ingest,
+            commands::engine_image_gen,
+            commands::engine_deep_search,
             commands::engine_qmd_index,
             commands::engine_qmd_search,
             commands::settings_get,

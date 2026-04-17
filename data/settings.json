@@ -4,24 +4,25 @@
   "apiKeys": {
     "anthropic": "",
     "openai": "",
-    "openrouter": ""
+    "openrouter": "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"
   },
   "models": {
-    "defaults": {
-      "coding": "nvidia/nemotron-3-super-120b-a12b:free",
-      "default": "nvidia/nemotron-3-super-120b-a12b:free"
-    },
     "enabled": [],
+    "defaults": {
+      "default": "nvidia/nemotron-3-super-120b-a12b:free",
+      "coding": "nvidia/nemotron-3-super-120b-a12b:free"
+    },
     "failoverList": []
   },
   "profiles": {
     "defaultProfile": "default",
-    "fallbackProfile": "analysis"
+    "fallbackProfile": "analysis",
+    "userProfiles": {}
   },
   "ingestion": {
     "maxDepth": 4,
     "maxFileSizeMB": 10,
-    "supportedExtensions": [".js", ".ts", ".py", ".rs", ".go", ".java", ".md", ".txt", ".json", ".html", ".css"]
+    "supportedExtensions": []
   },
   "backend": {
     "timeoutMs": 30000,
@@ -29,9 +30,12 @@
     "fallbackBehavior": "http"
   },
   "spellcheck": {
-    "enabled": true
+    "enabled": false
   },
   "advanced": {
     "debugLogging": false
+  },
+  "policy": {
+    "activeProfile": "default"
   }
 }

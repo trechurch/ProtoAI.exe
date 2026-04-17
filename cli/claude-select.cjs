@@ -1,7 +1,12 @@
 // ProtoAI CLI Selector — Full Production Version
 // Portable, path-resolved, zero hardcoded drive letters
 
-const paths = require("../server/access/env/paths");
+// Resolve paths module using PROTOAI_ROOT env var (set by Tauri)
+// or fall back to relative path from cli/ for direct invocation.
+const _pathsAbsolute = process.env.PROTOAI_ROOT
+    ? require('path').join(process.env.PROTOAI_ROOT, 'tauri-app', 'src-tauri', 'resources', 'server', 'access', 'env', 'paths')
+    : require('path').join(__dirname, '..', 'server', 'access', 'env', 'paths');
+const paths = require(_pathsAbsolute);
 
 const fs = require("fs");
 const path = require("path");
@@ -24,22 +29,78 @@ for (let i = 0; i < args.length; i++) {
 }
 
 // -------------------------------
-// LOAD PROFILES
+// LOAD PROFILES — hybrid resolution
+// Priority: user-profiles/<id>.json → data/archetypes/<id>.json → cli/helpers/profiles.json
 // -------------------------------
-const profileFile = paths.profiles();
-if (!fs.existsSync(profileFile)) {
-    console.error("Missing profiles.json");
-    process.exit(1);
+function loadArchetype(id) {
+    const archetypeFile = paths.archetypes(`${id}.json`);
+    if (!fs.existsSync(archetypeFile)) return null;
+    try {
+        const data = JSON.parse(fs.readFileSync(archetypeFile, "utf8"));
+        // Convert archetype schema → profile schema
+        const primaryModels = data.primaryModels || [];
+        const systemParts = [];
+        if (data.name) systemParts.push(`You are ${data.name}.`);
+        if (data.description) systemParts.push(data.description);
+        if (data.voice) systemParts.push(`Voice: ${data.voice}.`);
+        if (data.personality) systemParts.push(`Personality: ${data.personality}.`);
+        if (data.strengths?.length) systemParts.push(`Strengths: ${data.strengths.join(", ")}.`);
+        return {
+            model: primaryModels[0] || "nvidia/nemotron-3-super-120b-a12b:free",
+            fallback: primaryModels.slice(1),
+            system: systemParts.join(" "),
+            temperature: 0.7,
+            max_tokens: 2048,
+            verbosity: "balanced",
+            format: "plain",
+            memory_mode: "global+project",
+            file_ingestion: true,
+            cot: "suppress",
+        };
+    } catch (e) {
+        console.error(`[profile] Failed to parse archetype ${id}: ${e.message}`);
+        return null;
+    }
 }
 
-const profiles = JSON.parse(fs.readFileSync(profileFile, "utf8"));
-
-if (!profiles[profile]) {
-    console.error("Unknown profile:", profile);
-    process.exit(1);
+function loadUserProfile(id) {
+    const userFile = paths.userProfiles(`${id}.json`);
+    if (!fs.existsSync(userFile)) return null;
+    try {
+        const data = JSON.parse(fs.readFileSync(userFile, "utf8"));
+        // If it references an archetype, merge: archetype defaults + user overrides
+        if (data.archetypeId) {
+            const base = loadArchetype(data.archetypeId);
+            if (base) return Object.assign({}, base, data);
+        }
+        return data;
+    } catch (e) {
+        console.error(`[profile] Failed to parse user profile ${id}: ${e.message}`);
+        return null;
+    }
 }
 
-const p = profiles[profile];
+// Resolution chain
+let p = loadUserProfile(profile);
+
+if (!p) {
+    p = loadArchetype(profile);
+}
+
+if (!p) {
+    // Legacy flat profiles.json
+    const profileFile = paths.profiles();
+    if (!fs.existsSync(profileFile)) {
+        console.error("Missing profiles.json and no archetype/user-profile found for:", profile);
+        process.exit(1);
+    }
+    const profiles = JSON.parse(fs.readFileSync(profileFile, "utf8"));
+    if (!profiles[profile]) {
+        console.error("Unknown profile:", profile, "(checked user-profiles/, archetypes/, and profiles.json)");
+        process.exit(1);
+    }
+    p = profiles[profile];
+}
 
 // -------------------------------
 // LOAD API KEY

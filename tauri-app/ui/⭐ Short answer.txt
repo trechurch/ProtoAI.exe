@@ -1,0 +1,226 @@
+⭐ Short answer
+Yes — qmd becomes part of the Access Layer, and every SDOA module can use it through a clean, centralized adapter.
+
+This gives you:
+
+predictable context acquisition
+
+portable indexing
+
+model‑agnostic search
+
+workflow‑friendly results
+
+zero filesystem scanning unless needed
+
+⭐ Where qmd fits inside SDOA
+Surface Layer
+UI never calls qmd directly.
+It only triggers workflows like:
+
+“Search project”
+
+“Find related files”
+
+“Explain this module”
+
+“Refactor this component”
+
+The UI stays dumb — workflows do the work.
+
+Domain Layer
+Domain objects don’t know qmd exists.
+
+They only know:
+
+“search results”
+
+“snippets”
+
+“file references”
+
+“ranked relevance”
+
+This keeps your domain pure and portable.
+
+Orchestration Layer
+This is where qmd becomes a first‑class workflow step.
+
+Examples:
+
+SearchProjectWorkflow
+
+FindRelatedFilesWorkflow
+
+ExplainModuleWorkflow
+
+RefactorWorkflow
+
+IngestFolderWorkflow
+
+Each workflow calls the qmd adapter, not qmd directly.
+
+Access Layer
+This is where qmd lives.
+
+You create a module:
+
+Code
+/access/qmd/index.js
+This module exposes:
+
+Code
+search(query)
+vsearch(query)
+query(query)
+get(file)
+init(path)
+Every workflow uses this adapter — never the CLI directly.
+
+This keeps your architecture clean, portable, and testable.
+
+⭐ What this looks like in practice
+1. Create the qmd Access Module
+Code
+/access/qmd/index.js
+This module wraps qmd commands in a portable, root‑relative way.
+
+It becomes the single source of truth for:
+
+indexing
+
+searching
+
+retrieving snippets
+
+retrieving files
+
+fallback logic
+
+2. Update your Ingestion Workflow
+Your ingestion workflow becomes:
+
+Code
+init qmd index
+run qmd search/query
+store snippets + file refs
+fallback: read files only if needed
+emit ingestion events
+This is the cleanest, most SDOA‑aligned version of ingestion you’ve ever had.
+
+3. Update your Refactor Workflow
+Instead of:
+
+glob
+
+grep
+
+read
+
+embed
+
+hallucinate
+
+You now do:
+
+qmd query “refactor X”
+
+get ranked files
+
+read only those files
+
+propose changes
+
+This is deterministic and portable.
+
+4. Update your Chat Workflow
+Before answering a question:
+
+qmd search
+
+qmd vsearch
+
+qmd query
+
+gather snippets
+
+embed
+
+send to model
+
+This gives your selector clean, minimal, high‑signal context.
+
+⭐ Why this works beautifully with your architecture
+Because your system is:
+
+portable
+
+root‑relative
+
+workflow‑driven
+
+model‑agnostic
+
+log‑centric
+
+deterministic
+
+qmd gives you:
+
+predictable context
+
+minimal file reads
+
+clean logs
+
+consistent behavior across machines
+
+consistent behavior across models
+
+consistent behavior across workflows
+
+It’s the missing piece that makes your ingestion + orchestration bulletproof.
+
+
+
+Step 1: Install qmd
+
+First, install Bun if you don’t have it:
+
+curl -fsSL https://bun.sh/install | bash
+
+Then install qmd:
+
+bun install -g https://github.com/tobi/qmd
+
+Step 2: Index your projects
+
+For each project you work on:
+
+qmd collection add ./my-project — name myproject
+
+This indexes all markdown and JSON files by default. You can customize the file patterns with — mask:
+
+qmd collection add ./my-project — name myproject — mask “**/*.{ts,tsx,md,json}”
+
+Then generate vector embeddings for semantic search:
+
+qmd embed
+
+You can verify everything is indexed:
+
+qmd status
+Step 3: Add qmd as an MCP server in Claude Code
+
+Open your Claude Code MCP config at ~/.claude/mcp.json and add qmd:
+
+{
+  "mcpServers": {
+    "qmd": {
+      "command": "qmd",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

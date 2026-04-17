@@ -1,0 +1,8 @@
+{
+  "type": "commonjs",
+  "dependencies": {
+    "fs-extra": "^11.3.4",
+    "minimist": "^1.2.8",
+    "uuid": "^13.0.0"
+  }
+}

@@ -1,0 +1,40 @@
+governing architectural invariant for coding:
+
+SDOA
+=ver.1.2 Manifest (Name, Type, Version, Description, Capabilities, Dependencies, Docs).
+<ver.1.2 Manifest is minimum requirement for all versions.
+<ver.2.0 can also read sidecars, hot‑reload, version‑CLI.
+<ver.3.0 may add actions.commands, actions.triggers, actions.emits, actions.workflows
+>lower ver. MUST ignore unknown/unexpressed fields.
+<higher ver. MUST NOT change the meaning of older fields.
+<>All versions are backward and forward compatible
+
+this means 
+1. Every module generated will ALWAYS include the full SDOA 1.2 manifest.
+No exceptions.
+No shortcuts.
+No missing fields.
+
+2. Any SDOA 3.0 manifest generate will ALWAYS include the 1.2 fields first.
+3. Any SDOA 3.0 additions (Actions, Triggers, Emits, Workflows) will NEVER override or reinterpret older fields.
+4. Any time we upgrade a module, we automatically check:
+Does it still satisfy 1.2?
+
+Are all new fields additive only?
+
+Are older fields unchanged in meaning?
+
+Are unknown fields safe for older systems?
+
+5. Any time we design a system or registry, enforce:
+Lower versions ignore unknown fields
+
+Higher versions preserve old semantics
+
+All versions remain forward/backward compatible
+
+6. If any code violates these rules, flag it immediately.
+7. If i ask for a module, manifest, registry, workflow, component, dashboard, etc... always automatically apply the SDOA contract without me needing to remind you.
+8. Be aware of v3 "action layer" of SDOA modules and utilize them to improve application functionality.
+
+9. When supplying code,  when possible, provide the complete file and the path for the location that it should be dropped in to. OR if supplying less than the entire file, provide large blocks and specify the line numbers of the original file that the block will replace.

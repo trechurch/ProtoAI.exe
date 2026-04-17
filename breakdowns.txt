@@ -1,0 +1,26 @@
+ ┌────────────────────────────────────────────────────────┬────────────────────────────────────────────────────────┐
+  │                          File                          │                         Change                         │
+  ├────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
+  │ cli/claude-select.cjs                                  │ Added sendRequestStream() — SSE mode (stream: true),   │
+  │                                                        │ writes STREAM_CHUNK:<token> lines to stdout per token  │
+  ├────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
+  │ server/orchestration/workflows/SendMessageWorkflow.js  │ Switched exec → spawn, parses STREAM_CHUNK: lines and  │
+  │                                                        │ calls onChunk(token) as they arrive                    │
+  ├────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
+  │                                                        │ handleChatIPC accepts stream flag + requestId, calls   │
+  │ server/server-ipc.js                                   │ writeResponse({type:"stream", chunk}) for each token,  │
+  │                                                        │ assembles full reply for history                       │
+  ├────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
+  │                                                        │ Reader loop detects type:"stream" responses and emits  │
+  │ tauri-app/src-tauri/src/node_process_backend.rs        │ chat-stream Tauri events instead of resolving the      │
+  │                                                        │ pending oneshot sender                                 │
+  ├────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
+  │                                                        │ Added engine_chat_stream command, chat_stream() bridge │
+  │ tauri-app/src-tauri/src/commands.rs + engine_bridge.rs │  method, engine_image_gen, engine_deep_search commands │
+  │  + main.rs                                             │  (routes DeepSearch/ImageGen through persistent IPC    │
+  │                                                        │ instead of one-shot sidecar)                           │
+  ├────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
+  │                                                        │ Added sendChatMessageStreaming() — subscribes to       │
+  │ ui/app.js                                              │ chat-stream events, renders tokens incrementally into  │
+  │                                                        │ the reply bubble; updated sendMessageFromUI to use it  │
+  └────────────────────────────────────────────────────────┴────────────────────────────────────────────────────────┘
