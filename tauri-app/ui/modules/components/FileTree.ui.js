@@ -1,6 +1,7 @@
 // ============================================================
 // FileTree.ui.js — Collapsible Visual File Tree
 // version: 1.0.0
+// Last modified: 2026-05-04 03:11 UTC
 // depends: tauri-utils.js, EventBus.ui.js
 // ============================================================
 
@@ -29,6 +30,7 @@
         capabilities: ["tree.render", "tree.navigate", "tree.expand"],
         dependencies: ["tauri-utils.js", "EventBus.ui.js"],
         docs: { description: "Visual collapsible file tree. Emits selection events to EventBus." },
+            author: "ProtoAI team",
         actions: {
             commands: {
                 render:      { description: "Render tree into container.",   input: { container: "DOMElement", rootPath: "string" }, output: "void" },
@@ -154,6 +156,36 @@
             });
         });
 
+        // ── drop target (folders only) ────────────────────────
+        row.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = e.ctrlKey || e.metaKey ? "copy" : "move";
+            row.classList.add("drag-over");
+        });
+        row.addEventListener("dragleave", (e) => {
+            row.classList.remove("drag-over");
+        });
+        row.addEventListener("drop", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            row.classList.remove("drag-over");
+            
+            try {
+                const dataStr = e.dataTransfer.getData("text/plain");
+                if (!dataStr) return;
+                const data = JSON.parse(dataStr);
+                const paths = data.paths || [];
+                
+                if (paths.length > 0) {
+                    const isCopy = e.ctrlKey || e.metaKey;
+                    const targetDir = entry.path || entry.realPath;
+                    await _handleDropFiles(paths, targetDir, isCopy);
+                }
+            } catch(err) {
+                console.error("[FileTree] Drop error", err);
+            }
+        });
+
         // ── chevron click — expand/collapse ───────────────────
         chevron.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -237,20 +269,38 @@
     function setRootPath(path) { render(_container, path); }
     function refresh()         { if (_container && _rootPath) render(_container, _rootPath); }
 
-    // ── _fileIconChar ─────────────────────────────────────────
+    // ── _handleDropFiles ──
+
+    async function _handleDropFiles(paths, targetDir, isCopy) {
+        let successCount = 0;
+        for (const p of paths) {
+            const parentDir = p.replace(/[\\/][^\\/]+$/, "");
+            if (p === targetDir || targetDir.startsWith(p + "/") || parentDir === targetDir) continue;
+            const fileName = p.split(/[\\/]/).pop();
+            const newPath = targetDir + "/" + fileName;
+            try {
+                if (isCopy) {
+                    await window.backendConnector?.runWorkflow("fs_copy", { src: p, dest: newPath });
+                } else {
+                    await window.backendConnector?.runWorkflow("fs_rename", { old_path: p, new_path: newPath });
+                }
+                successCount++;
+            } catch (err) {
+                window.showToast?.(`Failed to ${isCopy ? 'copy' : 'move'} ${fileName}: ${err.message}`);
+            }
+        }
+        if (successCount > 0) {
+            refresh();
+            window.EventBus?.emit("filelist:refresh", {});
+            window.showToast?.(`${isCopy ? 'Copied' : 'Moved'} ${successCount} item(s)`);
+        }
+    }
+
     function _fileIconChar(ext) {
-        const map = {
-            js: "·", ts: "·", py: "·", rs: "·", go: "·",
-            md: "–", txt: "–", json: ":", yaml: ":", csv: ":",
-            html: "<", css: "~", svg: "◇",
-            jpg: "▣", png: "▣", gif: "▣",
-            mp3: "♪", mp4: "▶",
-            pdf: "≡", zip: "□",
-        };
+        const map={js:"·",ts:"·",py:"·",rs:"·",go:"·",md:"–",txt:"–",json:":",yaml:":",csv:":",html:"<",css:"~",svg:"◇",jpg:"▣",png:"▣",gif:"▣",mp3:"♪",mp4:"▶",pdf:"≡",zip:"□"};
         return map[ext?.toLowerCase()] || "·";
     }
 
-    // ── window export ─────────────────────────────────────────
     window.FileTree = { MANIFEST, render, setRootPath, refresh, selectPath };
 
     domReady(() => {

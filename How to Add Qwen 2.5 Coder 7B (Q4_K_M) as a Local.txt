@@ -1,0 +1,86 @@
+How to Add Qwen 2.5 Coder 7B (Q4_K_M) as a Local Backup/Default Model in ProtoAI
+01
+Download the Qwen 2.5 Coder 7B (Q4_K_M) GGUF
+Required
+You need the quantized GGUF file so ProtoAI can load it through your local inference engine.
+
+Go to HuggingFace and download: qwen2.5-coder-7b-instruct-q4_k_m.gguf
+
+Place it inside your portable models directory: /models/qwen2.5-coder-7b-q4km/
+
+Ensure the folder contains ONLY the model file and optional tokenizer files
+
+02
+Add the model to your ProtoAI model registry
+ProtoAI uses a unified model selector; adding a new entry makes it available everywhere.
+
+Edit: /config/models.json (or your selector’s registry file)
+
+Create a new entry named qwen-local-7b
+
+Set provider to local
+
+Set engine to llama.cpp or your local runner
+
+Point model_path to a root-relative path like ./models/qwen2.5-coder-7b-q4km/qwen2.5-coder-7b-instruct-q4_k_m.gguf
+
+03
+Define the model behavior profile
+ProtoAI uses behavior profiles to control temperature, max tokens, verbosity, and system prompts.
+
+Edit: /config/profiles/default.json or create /config/profiles/local-qwen.json
+
+Set model to qwen-local-7b
+
+Use temperature: 0.2 for coding
+
+Set format: "plain"
+
+Set memory_mode: "project" or "none" depending on your workflow
+
+04
+Add Qwen 7B to your fallback chain
+Most Common Setup
+This ensures ProtoAI automatically switches to the local model if cloud models fail.
+
+Edit: /config/fallback.json
+
+Add qwen-local-7b as the final fallback
+
+Keep your existing chain (Qwen → Gemini → DeepSeek → Claude → Local)
+
+Ensure ordering is correct so local is only used when needed
+
+05
+Set Qwen 7B as the default model (optional)
+If you want ProtoAI to always start with the local model, update the default profile.
+
+Edit: /config/default.json
+
+Change default.model to qwen-local-7b
+
+Or create a new profile like local-default and select it in the UI
+
+06
+Test the model inside ProtoAI
+Verification
+Verify that the model loads correctly and responds to coding prompts.
+
+Open ProtoAI
+
+Select the new model from the selector
+
+Run a test prompt: Write a Python function to diff two JSON files
+
+Check logs for: model load time, token speed, and fallback behavior
+
+What this gives you
+A fully offline, zero‑VRAM, portable coding model
+
+Works on any machine, even low‑spec laptops
+
+Perfect as a backup when cloud models fail
+
+Can be promoted to default for maximum portability
+
+Fits your SDOA v3 architecture and selector engine cleanly

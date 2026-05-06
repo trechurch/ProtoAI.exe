@@ -1,0 +1,9 @@
+{
+  "id": "local-qwen",
+  "model": "qwen-local-7b",
+  "temperature": 0.2,
+  "max_tokens": 2048,
+  "format": "plain",
+  "memory_mode": "none",
+  "system_prompt": "You are a coding‑assistant that outputs only plain text. Keep answers concise, accurate, and focused on programming tasks."
+}

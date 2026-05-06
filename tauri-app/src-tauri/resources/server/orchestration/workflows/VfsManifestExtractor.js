@@ -1,3 +1,4 @@
+// Last modified: 2026-05-04 03:11 UTC
 "use strict";
 
 // ============================================================
@@ -22,6 +23,25 @@ class VfsManifestExtractor {
     // Main entry point. Returns a manifest object for any file.
     // ── end of extract ───────────────────────────────────────
 
+    static MANIFEST = {
+        id:           "VfsManifestExtractor",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [],
+        dependencies: [],
+        docs: {
+            description: "Manages VfsManifestExtractor operations.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands:  {},
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+    
     extract(realPath, type) {
         const stat  = _safeStat(realPath);
         if (!stat) {

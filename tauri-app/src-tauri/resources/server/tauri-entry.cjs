@@ -1,3 +1,4 @@
+// Last modified: 2026-05-04 03:11 UTC
 // SDOA Version
 exports.VERSION = "1.0.0";
 exports.getVersion = () => exports.VERSION;
@@ -5,6 +6,27 @@ exports.getVersion = () => exports.VERSION;
 const path = require("path");
 const minimist = require("minimist");
 const registry = require("./orchestration/WorkflowRegistryInstance");
+
+// SDOA v3.0 MANIFEST
+const MANIFEST = {
+    id:           "tauri-entry",
+    type:         "utility",
+    runtime:      "NodeJS",
+    version:      "1.0.0",
+    capabilities: [],
+    dependencies: [],
+    docs: {
+        description: "tauri-entry utilities and exports.",
+        author: "ProtoAI team",
+    },
+    actions: {
+        commands:  {},
+        triggers:  {},
+        emits:     {},
+        workflows: {},
+    },
+};
+
 const { registerAllWorkflows } = require("./orchestration/registerWorkflows");
 
 registerAllWorkflows();

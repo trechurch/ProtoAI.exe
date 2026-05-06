@@ -1,0 +1,148 @@
+/* ============================================================
+/* Last modified: 2026-05-04 03:11 UTC */
+   Button.prim.css — SDOA v4 Primitive Styles
+   Co-located with Button.prim.js
+   ============================================================ */
+
+/* ── Base ──────────────────────────────────────────────────── */
+.sdoa-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: all var(--duration-fast) var(--ease-default);
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.sdoa-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sdoa-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Sizes ─────────────────────────────────────────────────── */
+.sdoa-button--sm {
+  padding: var(--space-2xs) var(--space-sm);
+  font-size: var(--text-xs);
+  border-radius: var(--radius-sm);
+  min-height: 24px;
+}
+
+.sdoa-button--md {
+  padding: var(--space-xs) var(--space-md);
+  font-size: var(--text-sm);
+  min-height: 32px;
+}
+
+.sdoa-button--lg {
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--text-base);
+  min-height: 40px;
+}
+
+/* ── Variants ──────────────────────────────────────────────── */
+
+/* Primary */
+.sdoa-button--primary {
+  background: linear-gradient(135deg, var(--accent), #3b82f6);
+  color: #fff;
+  border-color: rgba(79, 140, 255, 0.3);
+}
+.sdoa-button--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #6ba3ff, #4f8cff);
+  box-shadow: 0 0 12px rgba(79, 140, 255, 0.3);
+}
+.sdoa-button--primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Secondary */
+.sdoa-button--secondary {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-color: var(--border-subtle);
+}
+.sdoa-button--secondary:hover:not(:disabled) {
+  background: var(--bg-elevated-2);
+  border-color: var(--border-mid);
+}
+
+/* Ghost */
+.sdoa-button--ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: transparent;
+}
+.sdoa-button--ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* Danger */
+.sdoa-button--danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-error);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+.sdoa-button--danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Icon-only */
+.sdoa-button--icon {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: transparent;
+  padding: var(--space-xs);
+  min-width: 32px;
+  min-height: 32px;
+}
+.sdoa-button--icon:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* ── Inner elements ────────────────────────────────────────── */
+.sdoa-button__icon {
+  display: inline-flex;
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.sdoa-button__label {
+  display: inline-flex;
+}
+
+/* ── Loading spinner ───────────────────────────────────────── */
+.sdoa-button--loading {
+  pointer-events: none;
+}
+
+.sdoa-button__spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: sdoa-button-spin 0.6s linear infinite;
+}
+
+@keyframes sdoa-button-spin {
+  to { transform: rotate(360deg); }
+}

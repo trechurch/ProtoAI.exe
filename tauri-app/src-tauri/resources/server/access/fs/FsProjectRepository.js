@@ -1,10 +1,30 @@
+// Last modified: 2026-05-04 03:11 UTC
 const fs = require("fs-extra");
 const path = require("path");
 const BaseRepository = require("./BaseRepository");
 const paths = require("../env/paths");
 
 class FsProjectRepository extends BaseRepository {
-  constructor() {
+
+    static MANIFEST = {
+        id:           "FsProjectRepository",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [],
+        dependencies: [],
+        docs: {
+            description: "Manages FsProjectRepository operations.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands:  {},
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+      constructor() {
     super(paths.projects());
   }
 

@@ -1,6 +1,7 @@
 // ============================================================
 // QmdAdapter.ui.js — UI Adapter (Browser-Safe)
 // version: 3.0.0
+// Last modified: 2026-05-04 03:11 UTC
 // depends: tauri-utils.js, BackendConnector.ui.js
 // ============================================================
 

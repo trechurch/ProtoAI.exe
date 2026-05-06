@@ -1,0 +1,117 @@
+/* Last modified: 2026-05-04 03:11 UTC */
+/* Form.prim.css — SDOA v4 */
+
+.sdoa-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.sdoa-form--grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+.sdoa-form__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.sdoa-form--grid .sdoa-form__row {
+  flex-direction: column;
+}
+
+.sdoa-form__separator {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: var(--space-sm) 0;
+}
+
+.sdoa-form__heading {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+}
+
+/* ── Toggle row ────────────────────────────────────────────── */
+.sdoa-form__toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  min-height: 36px;
+}
+
+.sdoa-form__toggle-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.sdoa-form__toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.sdoa-form__toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.sdoa-form__toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-deep);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  transition: all var(--duration-fast) var(--ease-default);
+}
+
+.sdoa-form__toggle-slider::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: all var(--duration-fast) var(--ease-default);
+}
+
+.sdoa-form__toggle-switch input:checked + .sdoa-form__toggle-slider {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.sdoa-form__toggle-switch input:checked + .sdoa-form__toggle-slider::before {
+  transform: translateX(18px);
+  background: var(--accent);
+}
+
+/* ── Select styling ────────────────────────────────────────── */
+.sdoa-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239ca3af'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+/* ── Submit row ────────────────────────────────────────────── */
+.sdoa-form__submit-row {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-subtle);
+}

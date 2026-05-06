@@ -1,10 +1,30 @@
+// Last modified: 2026-05-04 03:11 UTC
 // QmdAdapter.js — wraps @tobilu/qmd via the bundled Node.js runtime
 // Spawns qmd as a child process since it's an ESM-only package
 const { spawn } = require("child_process");
 const path = require("path");
 
 class QmdAdapter {
-  constructor(options = {}) {
+
+    static MANIFEST = {
+        id:           "QmdAdapter",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [],
+        dependencies: [],
+        docs: {
+            description: "Manages QmdAdapter operations.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands:  {},
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+      constructor(options = {}) {
     this.qmdEntry = options.qmdEntry || findQmdEntry();
   }
 

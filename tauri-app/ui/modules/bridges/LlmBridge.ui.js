@@ -1,6 +1,7 @@
 // ============================================================
 // LlmBridge.ui.js — UI Bridge (Browser-Safe)
-// version: 3.0.0
+// version: 3.0.1
+// Last modified: 2026-05-04 03:11 UTC
 // depends: tauri-utils.js, BackendConnector.ui.js, LlmPolicyEngine.ui.js
 // ============================================================
 
@@ -30,7 +31,7 @@
             id:      "LlmBridge.ui",
             type:    "adapter",
             runtime: "Browser",
-            version: "3.0.0",
+            version: "3.0.1",
 
             // v1.2 fields — always present, never removed
             capabilities: [
@@ -46,6 +47,7 @@
             ],
             docs: {
                 description: "Browser-safe LLM generation bridge. Passes generation requests and tier hints to the backend via BackendConnector.ui. Emits UI-level events for route selection and failure. Failover logic is owned by the backend LlmBridge.js.",
+            author: "ProtoAI team",
                 input: {
                     generate: {
                         prompt:       "string",
@@ -81,12 +83,16 @@
                         output: "string | LlmResponse"
                     },
                     chat: {
-                        description: "Convenience wrapper for generate() using the engine_chat workflow.",
+                        description: "Convenience wrapper for generate() using the SendMessageWorkflow.",
                         input: {
-                            project: "string",
-                            profile: "string?",
-                            engine:  "string?",
-                            message: "string"
+                            project:      "string",
+                            profile:      "string?",
+                            engine:       "string?",
+                            message:      "string",
+                            stream:       "boolean?",
+                            responseMode: "string?",
+                            historyDepth: "number|null?",
+                            systemExtra:  "string?",
                         },
                         output: "string | ChatResponse"
                     }
@@ -121,12 +127,16 @@
                         output: "string | LlmResponse"
                     },
                     chat: {
-                        description: "Stateful chat workflow via engine_chat.",
+                        description: "Stateful chat workflow via SendMessageWorkflow.",
                         input: {
-                            project: "string",
-                            profile: "string?",
-                            engine:  "string?",
-                            message: "string"
+                            project:      "string",
+                            profile:      "string?",
+                            engine:       "string?",
+                            message:      "string",
+                            stream:       "boolean?",
+                            responseMode: "string?",
+                            historyDepth: "number|null?",
+                            systemExtra:  "string?",
                         },
                         output: "string | ChatResponse"
                     }
@@ -159,6 +169,8 @@
                     }
                 }
             }
+            // Also emit on global EventBus for SendButton disabled state etc.
+            window.EventBus?.emit(`llmbridge:${event}`, data);
         }
 
         // ── end of event emitter ─────────────────────────────
@@ -215,11 +227,42 @@
 
         // ── chat ─────────────────────────────────────────────
         // Stateful chat wrapper that routes through the
-        // SendMessageWorkflow / engine_chat path.
-        // Used by app.js for the main chat interface.
+        // SendMessageWorkflow path.
+        //
+        // FIX v3.0.1: Previously only forwarded {project,
+        // profile, engine, message}. Now passes all params so
+        // stream, responseMode, historyDepth, and systemExtra
+        // actually reach the backend workflow.
         // ── end of chat ──────────────────────────────────────
 
-        async chat({ project, profile = "", engine = "", message }) {
+        // ── orchestrator ─────────────────────────────────────
+        get _orchestratorEnabled() {
+            return localStorage.getItem("protoai:orchestrator:enabled") === "true";
+        }
+
+        _playbackOrchestratorEvents(orchestrator) {
+            if (!orchestrator || !orchestrator.events) return;
+            const events = orchestrator.events;
+            let delay = 0;
+            events.forEach(ev => {
+                setTimeout(() => {
+                    window.EventBus?.emit(ev.type, ev.data || {});
+                }, delay);
+                delay += 220;
+            });
+        }
+        // ── end of orchestrator ───────────────────────────────
+
+        async chat({
+            project,
+            profile      = "",
+            engine       = "",
+            message,
+            stream       = true,
+            responseMode = "standard",
+            historyDepth = null,
+            systemExtra  = "",
+        }) {
             if (!message || !message.trim()) {
                 console.warn("[LlmBridge.ui] chat() called with empty message.");
                 return "";
@@ -227,20 +270,48 @@
 
             this.emit("generateStarted", { tier: "chat" });
 
+            const useOrchestrator = this._orchestratorEnabled;
+            const workflowName    = useOrchestrator ? "MultiModelSendWorkflow" : "SendMessageWorkflow";
+
             try {
                 const result = await this._connector.runWorkflow(
-                    "SendMessageWorkflow", { project, profile, engine, message }
+                    workflowName, {
+                        project,
+                        profile,
+                        engine,
+                        message,
+                        stream,
+                        responseMode,
+                        historyDepth,
+                        systemExtra,
+                    }
                 );
 
                 this.emit("generateCompleted", { tier: "chat" });
-                // Extract reply string from result shape:
-                // engine_bridge returns { reply, engine, profile, project }
-                // or the raw string from some paths
+
+                // Detect explicit backend failure and surface it as a thrown error
+                // so handleSendMessage catch block shows an error bubble instead of silence.
+                if (result && result.ok === false) {
+                    const errMsg = result.error || result.detail || "Backend returned an error";
+                    throw new Error("[Backend] " + errMsg);
+                }
+
+                if (useOrchestrator && result?.orchestrator) {
+                    this._playbackOrchestratorEvents(result.orchestrator);
+                }
+
+                // Extract reply string from result shape
                 if (typeof result === "string") return result;
-                if (result?.reply)        return result.reply;
-                if (result?.data?.reply)  return result.data.reply;
-                if (result?.response)     return result.response;
-                return result ?? "";
+
+                // Orchestrator result is often in result.response (v3.0)
+                const reply = result?.response || result?.reply || result?.data?.reply || result?.data?.response;
+
+                // Empty reply without explicit error -- surface it so the user sees something
+                if (!reply && reply !== 0) {
+                    throw new Error("AI returned an empty response. Check your API key and model in Settings.");
+                }
+
+                return reply;
 
             } catch (err) {
                 this.emit("generateFailed", { tier: "chat", error: err.message });

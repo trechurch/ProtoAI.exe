@@ -1,7 +1,27 @@
+// Last modified: 2026-05-04 03:11 UTC
 "use strict";
 
 class WorkflowRegistry {
-  constructor() {
+
+    static MANIFEST = {
+        id:           "WorkflowRegistry",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [],
+        dependencies: [],
+        docs: {
+            description: "Manages WorkflowRegistry operations.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands:  {},
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+      constructor() {
     this.workflows = new Map();
   }
 

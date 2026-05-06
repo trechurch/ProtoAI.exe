@@ -1,0 +1,156 @@
+ ## ProtoAI Context Resume — 2026-04-03
+
+  ### What ProtoAI is
+  - Tauri v2 desktop app + Rust sidecar + Node.js IPC
+  - Working directory: c:\ProtoAI.exe
+  - Frontend: ui/index.html, ui/app.js, ui/styles.css
+  - Backend: tauri-app/src-tauri (Rust), server/ (Node.js)
+  - Config: tauri-app/src-tauri/tauri.conf.json
+
+  ### Completed features
+  1. Window resized to 1280×900 (tauri.conf.json)
+  2. Empty chat state shows custom ProtoAI icon (copied from tauri icons/128x128.png)
+  3. All action chips (Prompt Creator, Generate Image, Research, Podcast, Quiz, Connectors) now properly send user's
+  input text to the LLM instead of ignoring it. Fixed triggerAction() to read input before clearing it.
+
+  ### In progress — Browser tab feature
+  User wants a "Browser" tab in the right pane (alongside Files/Code/Tools) with:
+  - URL input bar + go/back/forward/reload buttons
+  - iframe rendering for general web browsing
+  - If a page refuses to load (X-Frame-Options DENY), show a friendly message in the chat AND return the right panel to
+  its previous state (or keep state if browser was already in use)
+
+  ### Files to modify
+  - ui/index.html: Add "Browser" tab button to #rightModeTabs
+  - ui/app.js: Add renderRightBrowser() + browser state management
+  - ui/styles.css: Add styles for browser toolbar + iframe
+
+  ### Key patterns
+  - appendMessage(role, text, isHtml) for chat rendering
+  - runWorkflow(name, payload) for backend calls
+  - activeRightMode tracks current right-pane tab
+  - renderRightPane() dispatches to renderRight*(container)
+
+  ProtoAI Feature Audit
+
+  ✅ Working Features (Current)
+
+  - Chat with projects/profiles/engine selection
+  - Tauri IPC + HTTP fallback (port 17890)
+  - File attachment + code editor (Monaco)
+  - Split view (single/vertical/horizontal)
+  - Quick actions: Prompt Creator, Generate Image, Deep Search, Podcast, Quiz
+  - Spellcheck (3-state), Command palette, Keyboard shortcuts
+  - Auto-restarting sidecar watchdog + engine reconnect
+  - Export chat, Add sources, Right pane tabs (Files/Code/Tools)
+  - Window: 1280×900 with custom logo
+
+  ---
+  🟡 Missing / Unimplemented Features
+
+  1. Ingest workflow | Value: High | Difficulty: Medium
+
+  The Rust backend exposes engine_ingest() (commands.rs:89-94) and the bridge has ingest() (engine_bridge.rs:176-178),
+  but no UI calls it. The Tools tab has an "Ingest Code File" button (app.js:1061) that just opens the file picker
+  instead of actually calling ingest. The server has IngestWorkflow.js but it's never registered in the workflow
+  registry.
+
+  2. DeepSearch, ImageGen workflows not registered in persistent IPC | Value: High | Difficulty: Easy-Medium
+
+  These workflows exist in server/orchestration/workflows/ but are NOT registered in server.js or registerWorkflows.js.
+  They currently work only via HTTP fallback routes in server-ipc.js. They should be registered in the main registry so
+  the Tauri IPC path can invoke them directly.
+
+  3. Browser tab in right pane | Value: Medium-High | Difficulty: Medium
+
+  You requested this just now — iframe-based browser with URL bar, back/forward/reload, fallback-to-chat on
+  X-Frame-Errors, state-preserving.
+
+  4. Code Tools UI has no actual tools | Value: Medium | Difficulty: Easy-Medium
+
+  The Tools tab has buttons for Spellcheck, Voice Chat, Version Info, Ingest Code, and Export Chat. But Ingest Code
+  doesn't actually ingest — it just reopens the file picker. Voice Chat uses Web Speech API (browser only, won't work in
+   Tauri WebView2 reliably).
+
+  5. No persistent chat memory / context window | Value: High | Difficulty: Medium-Hard
+
+  The memory system exists (/remember, MEMORY.md), but the app itself doesn't have in-chat memory, semantic search, or
+  "remember this conversation" functionality. Chat history is flat JSON files. No ability to tag, bookmark, or search
+  old messages.
+
+  6. No real "Connectors" functionality | Value: Medium | Difficulty: Medium
+
+  The "Connectors" chip exists (app.js:684-689) but it just sends a system-prompted chat. There are no actual configured
+   connectors — no MCP servers, no API integrations, no LLM provider connections beyond the ones in ENGINES list. It's a
+   fake feature — it just asks the LLM to "list connectors".
+
+  7. No model output caching | Value: Medium | Difficulty: Medium
+
+  No caching layer for repeated or similar prompts. Could save API costs and latency.
+
+  8. No file preview/rendering | Value: Medium | Difficulty: Easy
+
+  When files are attached, they show in the file list but can't be previewed. A file preview panel (text files, images,
+  PDFs) in the right pane would provide value for the "files attached" workflow.
+
+  9. No undo/redo in chat | Value: Low-Medium | Difficulty: Medium
+
+  No ability to edit a sent message and re-send, or undo the last message. In Monaco editor there's undo, but the chat
+  input is a plain textarea.
+
+  10. Missing "Voice Chat" real integration | Value: Low-Medium | Difficulty: Medium
+
+  Currently uses browser Web Speech API only. No actual TTS (text-to-speech) response from the AI — users only get text
+  back. No voice recording, transcription, or playback.
+
+  11. No streaming / incremental response rendering | Value: High | Difficulty: Hard
+
+  Responses are displayed all-at-once after the LLM finishes. No streaming token-by-token display, no "thinking"
+  indicator during generation — just the thinking blinker.
+
+  12. Baseline CLI tools not migrated | Value: Low-Medium | Difficulty: Easy
+
+  The baseline has baseline/cli/claude-select.js — a CLI tool for selecting Claude via environment. This didn't make it
+  into the current build as a CLI or config feature.
+
+  ---
+  Prioritization Matrix
+
+  ┌─────────────────────────────────────────┬──────────┬────────────┬────────────────────────────┐
+  │                 Feature                 │  Value   │ Difficulty │         Net Score          │
+  ├─────────────────────────────────────────┼──────────┼────────────┼────────────────────────────┤
+  │ Streaming responses                     │ High     │ Hard       │ High (hard but big UX win) │
+  ├─────────────────────────────────────────┼──────────┼────────────┼────────────────────────────┤
+  │ File preview in right pane              │ Medium   │ Easy       │ High                       │
+  ├─────────────────────────────────────────┼──────────┼────────────┼────────────────────────────┤
+  │ Voice Chat (TTS + real STT)             │ Med      │ Medium     │ Medium                     │
+  ├─────────────────────────────────────────┼──────────┼────────────┼────────────────────────────┤
+  │ Chat memory/search                      │ High     │ Hard       │ Medium                     │
+  ├─────────────────────────────────────────┼──────────┼────────────┼────────────────────────────┤
+  │ Actual Connectors/MCP                   │ Medium   │ Medium     │ Medium                     │
+  ├─────────────────────────────────────────┼──────────┼────────────┼────────────────────────────┤
+  │ Response caching                        │ Medium   │ Medium     │ Medium                     │
+  ├─────────────────────────────────────────┼──────────┼────────────┼────────────────────────────┤
+  │ Message edit/re-send                    │ Low-Med  │ Medium     │ Low-Med                    │
+  ├─────────────────────────────────────────┼──────────┼────────────┼────────────────────────────┤
+  │ CLI tools                               │ Low-Med  │ Easy       │ Medium                     │
+  └─────────────────────────────────────────┴──────────┴────────────┴────────────────────────────┘
+
+  ---
+  Want me to tackle any of these? I'd start with #2 (register DeepSearch/ImageGen properly) or #8 (file preview) since
+  they're the highest value-to-effort ratio.
+
+✻ Churned for 4m 43s
+
+● Agent "Explore current ProtoAI state" completed
+
+● The background agent ran out of credits before completing, but I already covered the full audit in my message above.
+  The audit is comprehensive — I read all the source files and the baseline comparison myself.
+
+  Want me to start building any of those missing features? The lowest-highest-value ones are:
+
+  - #2: Register DeepSearch/ImageGen workflows in the main server (2 files, ~10 lines each)
+  - #1: Wire up the Ingest button to actually call engine_ingest (1 file, ~5 lines)
+  - #8: File preview in the right pane (new tab, ~50 lines JS + CSS)
+
+claude --resume 2cdd74ad-5f3b-4135-9d1c-8dd64d526ddd

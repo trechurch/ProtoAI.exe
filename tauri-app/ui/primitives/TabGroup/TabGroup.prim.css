@@ -1,0 +1,113 @@
+/* Last modified: 2026-05-04 03:11 UTC */
+/* TabGroup.prim.css — SDOA v4 */
+
+.sdoa-tabgroup {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sdoa-tabgroup--vertical {
+  flex-direction: row;
+}
+
+/* ── Tab Bar ───────────────────────────────────────────────── */
+.sdoa-tabgroup__bar {
+  display: flex;
+  gap: var(--space-2xs);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 var(--space-sm);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.sdoa-tabgroup--vertical .sdoa-tabgroup__bar {
+  flex-direction: column;
+  border-bottom: none;
+  border-right: 1px solid var(--border-subtle);
+  padding: var(--space-sm) 0;
+  min-width: 140px;
+  overflow-x: visible;
+  overflow-y: auto;
+}
+
+/* ── Individual Tab ────────────────────────────────────────── */
+.sdoa-tabgroup__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--duration-fast) var(--ease-default);
+  position: relative;
+}
+
+.sdoa-tabgroup__tab:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.sdoa-tabgroup__tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.sdoa-tabgroup__tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Vertical tabs */
+.sdoa-tabgroup--vertical .sdoa-tabgroup__tab {
+  border-bottom: none;
+  border-left: 2px solid transparent;
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  width: 100%;
+}
+
+.sdoa-tabgroup--vertical .sdoa-tabgroup__tab--active {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Small variant */
+.sdoa-tabgroup--sm .sdoa-tabgroup__tab {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-xs);
+}
+
+/* ── Tab inner elements ────────────────────────────────────── */
+.sdoa-tabgroup__tab-icon {
+  font-size: 1em;
+  line-height: 1;
+}
+
+.sdoa-tabgroup__tab-label {
+  line-height: 1;
+}
+
+.sdoa-tabgroup__tab-badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* ── Content ───────────────────────────────────────────────── */
+.sdoa-tabgroup__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+}

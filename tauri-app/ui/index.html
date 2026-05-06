@@ -2,451 +2,240 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="color-scheme" content="dark" />
   <title>ProtoAI – Dev Console</title>
-  <link rel="stylesheet" href="styles.css" />
-  <script>var APP_VERSION="0.1.2";</script>
-  <style>html{background:#0d0d0d!important;}</style>
+  <style>
+    #boot-status { position: fixed; top: 10px; right: 10px; font-size: 10px; font-family: monospace; color: #4f8cff; z-index: 9999; pointer-events: none; }
+  </style>
+
+  <!-- SDOA v4: Design Tokens & Base -->
+  <link rel="stylesheet" href="/tokens.css" />
+  
+  <!-- SDOA v4: Primitive Styles -->
+  <link rel="stylesheet" href="/primitives/Button/Button.prim.css" />
+  <link rel="stylesheet" href="/primitives/Toast/Toast.prim.css" />
+  <link rel="stylesheet" href="/primitives/Input/Input.prim.css" />
+  <link rel="stylesheet" href="/primitives/Panel/Panel.prim.css" />
+  <link rel="stylesheet" href="/primitives/Modal/Modal.prim.css" />
+  <link rel="stylesheet" href="/primitives/TabGroup/TabGroup.prim.css" />
+  <link rel="stylesheet" href="/primitives/List/List.prim.css" />
+  <link rel="stylesheet" href="/primitives/Form/Form.prim.css" />
+  <link rel="stylesheet" href="/primitives/Badge/Badge.prim.css" />
+  <link rel="stylesheet" href="/primitives/Spinner/Spinner.prim.css" />
+  <link rel="stylesheet" href="/primitives/EmptyState/EmptyState.prim.css" />
+  <link rel="stylesheet" href="/primitives/Toolbar/Toolbar.prim.css" />
+  <link rel="stylesheet" href="/primitives/ContextMenu/ContextMenu.prim.css" />
+  <link rel="stylesheet" href="/primitives/Toggle/Toggle.prim.css" />
+  <link rel="stylesheet" href="/primitives/Select/Select.prim.css" />
+
+  <!-- SDOA v4: Feature Styles -->
+  <link rel="stylesheet" href="/features/ModelManager/ModelManager.feature.css" />
+  <link rel="stylesheet" href="/features/Chat/Chat.feature.css" />
+  <link rel="stylesheet" href="/features/AppShell/AppShell.feature.css" />
+  <link rel="stylesheet" href="/features/Settings/Settings.feature.css" />
+  <link rel="stylesheet" href="/features/ProjectManager/ProjectManager.feature.css" />
+  <link rel="stylesheet" href="/features/FileExplorer/FileExplorer.feature.css" />
+  <link rel="stylesheet" href="/features/PartnerTicker/PartnerTicker.feature.css" />
+
+
+  <script>var APP_VERSION="0.4.0";</script>
 </head>
 
-<body style="background:#0d0d0d;margin:0;">
+<body>
+  <div id="boot-status">Booting…</div>
   <div id="app">
 
     <!-- LEFT SIDEBAR -->
     <aside id="sidebar-left">
-      <div class="sidebar-header">
-        <div>
-          <h1>ProtoAI</h1>
-          <div class="tagline">
-            A UI that feels like VS Code + Cursor + Claude + Notion had a child.
+      <div class="sidebar-scroll-area">
+        <div class="sidebar-header">
+          <div style="display:flex; align-items:center; gap:var(--space-sm);">
+            <div style="background:var(--accent); width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; box-shadow:0 0 15px rgba(79, 140, 255, 0.4);">
+              <span style="color:#fff; font-weight:900; font-size:20px;">P</span>
+            </div>
+            <div>
+              <h1>ProtoAI</h1>
+              <div class="tagline">SDOA v4 Developer Hub</div>
+            </div>
+          </div>
+          <button id="newProjectBtn" class="sdoa-button sdoa-button--primary sdoa-button--md" style="width:100%; margin-top:var(--space-md);">+ New Project</button>
+        </div>
+
+        <!-- Project List Section -->
+        <div class="sdoa-panel__section">
+          <div class="sdoa-panel__section-title">
+            <span><span style="font-size:14px;">📁</span> PROJECTS</span>
+            <span class="sdoa-badge" id="projectCount">0</span>
+          </div>
+          <div id="projectListContainer" class="sdoa-list sdoa-list--sm" style="max-height: 40vh;">
+            <ul id="projectList" class="sdoa-list__items"></ul>
+            <div id="projectListEmpty" class="sdoa-list__empty hidden" style="padding:12px; font-size:12px; color:var(--text-dim);">No projects found</div>
+          </div>
+          <div style="display:flex; gap:6px; margin-top:12px;">
+            <button id="refreshProjectsBtn" class="sdoa-button sdoa-button--ghost sdoa-button--sm" style="flex:1;">Refresh</button>
+            <button id="manageProjectsBtn" class="sdoa-button sdoa-button--ghost sdoa-button--sm" style="flex:1;">Manage</button>
           </div>
         </div>
-        <button id="newProjectBtn" class="primary">+ New Project</button>
-      </div>
 
-      <div class="sidebar-section">
-        <div class="section-title">Projects</div>
-        <ul id="projectList" class="list"></ul>
-      </div>
+        <!-- History Section -->
+        <div class="sdoa-panel__section">
+          <div class="sdoa-panel__section-title">
+            <span><span style="font-size:14px;">🕒</span> RECENT SESSIONS</span>
+          </div>
+          <div id="historyListContainer" class="sdoa-list sdoa-list--sm" style="max-height: 30vh;">
+             <ul id="historyList" class="sdoa-list__items"></ul>
+             <div id="historyListEmpty" class="sdoa-list__empty hidden" style="padding:12px; font-size:12px; color:var(--text-dim);">No history</div>
+          </div>
+        </div>
 
-      <div class="sidebar-section">
-        <div class="section-title">Chats</div>
-        <div id="chatTabs" class="tabs"></div>
-        <button id="newChatBtn" class="secondary full-width">+ New Chat</button>
-      </div>
+      </div><!-- /.sidebar-scroll-area -->
+      
+      <div id="partnerTickerHost" style="flex: 1; display: flex; flex-direction: column; min-height: 0;"></div>
+      <div class="resizer resizer-left" id="resizer-left"></div>
     </aside>
 
     <!-- MAIN AREA -->
     <main id="main">
-
-      <!-- HEADER -->
       <header id="main-header">
         <div class="main-title">
           <span id="currentProjectName">No project selected</span>
-          <span id="currentProfileName" class="badge">No profile</span>
+          <span id="currentProfileName" class="sdoa-badge">No profile</span>
         </div>
-        <div class="version-info">
-          <span id="versionBadge" class="badge version">v</span>
-          <span id="updateDot" class="update-dot" title="Checking for updates..."></span>
-        </div>
-
         <div class="main-controls">
-          <button id="splitToggleBtn" class="icon-btn" title="Toggle split view">⧉</button>
-          <button id="toggleCanvasBtn" class="icon-btn" title="Collapse/Expand Canvas">⤢</button>
+          <button id="openModelsButton" class="sdoa-button sdoa-button--icon" title="Model Manager">🧠</button>
+          <button id="openSettingsButton" class="sdoa-button sdoa-button--icon" title="Settings (Ctrl+Shift+S)">⚙</button>
+          <button id="splitToggleBtn" class="sdoa-button sdoa-button--icon" title="Toggle split view">⧉</button>
+          <button id="toggleCanvasBtn" class="sdoa-button sdoa-button--icon" title="Collapse/Expand Canvas">⤢</button>
         </div>
       </header>
 
-      <!-- WORKSPACE -->
       <section id="workspace">
-
-        <!-- LEFT PANE (Chat) -->
-        <div id="pane-left">
-          <div id="canvas">
-            <div id="chatContainer">
-            <div class="chat-empty-state" id="chatEmptyState">
-              <img class="empty-logo" src="icon.png" alt="ProtoAI" draggable="false" />
-              <div class="empty-title">ProtoAI</div>
-              <div class="empty-hint">Select a project from the sidebar to begin</div>
-            </div>
-          </div>
-          </div>
+        <div id="pane-left"></div>
+        <div id="pane-right">
+          <div id="rightModeTabs" class="sdoa-tabgroup__bar"></div>
+          <div id="rightPaneContent"></div>
         </div>
-
-        <!-- RIGHT PANE -->
-        <div id="pane-right" style="display:none;">
-          <div id="rightModeTabs" class="tabs small">
-            <button data-mode="files"    class="tab active">Files</button>
-            <button data-mode="code"     class="tab">Code</button>
-            <button data-mode="browser"  class="tab">Browser</button>
-            <button data-mode="terminal" class="tab">Terminal</button>
-            <button data-mode="search"   class="tab">Search</button>
-          </div>
-          <div id="rightPaneContent" id="fileTreeContainer"></div>
-        </div>
-
       </section>
-
-      <!-- INPUT BAR -->
-      <section id="inputBar">
-
-        <div id="inputTopRow">
-          <select id="profileSelect"></select>
-          <select id="engineSelect"></select>
-          <button id="spellcheckToggle" class="toggle-btn mode-local" title="Spellcheck: ON">ABC ✓</button>
-          <button id="attachFileBtn" class="icon-btn" title="Attach folder (Ctrl+click for single file)">📎</button>
-          <button id="addSourceBtn" class="icon-btn" title="Add sources">📚</button>
-        </div>
-
-        <div id="inputMiddleRow">
-          <textarea id="messageInput" rows="3"
-            placeholder="Ask ProtoAI… (Shift+Enter for newline)"></textarea>
-        </div>
-
-        <div id="inputBottomRow">
-          <div class="input-actions">
-            <button class="chip" data-action="image">🖼 Prompt Creator</button>
-            <button class="chip" data-action="image_gen">🖼️ Generate Image</button>
-            <button class="chip" data-action="deepsearch">🔎 Research Assistant</button>
-            <button class="chip" data-action="podcast">🎙 Script Writer</button>
-            <button class="chip" data-action="quiz">🧠 Take a Quiz</button>
-            <button class="chip" data-action="connectors">🔌 Use Connectors</button>
-          </div>
-          <button id="sendBtn" class="primary">Send</button>
-        </div>
-
-        <input type="file" id="fileInput" multiple style="display:none;" />
-        <input type="file" id="folderInput" webkitdirectory multiple style="display:none;" />
-      </section>
-
     </main>
 
     <!-- RIGHT SIDEBAR -->
     <aside id="sidebar-right">
+      <div class="resizer resizer-right" id="resizer-right"></div>
 
-      <div class="sidebar-section">
-        <div class="section-title">Model Swap</div>
-        <div id="otfmsPanel">
-          <select id="otfmsEngineSelect"></select>
-          <button id="applyEngineBtn" class="secondary full-width">⚡ Apply to Chat</button>
+      <div class="sdoa-panel__section" style="border-top:none; background:rgba(79, 140, 255, 0.03);">
+        <button id="autoOptimizeBtn" class="sdoa-button sdoa-button--primary sdoa-button--lg" style="width:100%; box-shadow:0 0 20px rgba(79, 140, 255, 0.2);">🪄 Optimize Models</button>
+      </div>
+
+      <div class="sdoa-panel__section">
+        <div class="sdoa-panel__section-title">
+          <span><span style="font-size:14px;">⚡</span> QUICK SWAP</span>
+        </div>
+        <div id="otfmsPanel" style="display:flex; flex-direction:column; gap:8px;">
+          <select id="otfmsEngineSelect" class="sdoa-select" style="width:100%;"></select>
+          <button id="applyEngineBtn" class="sdoa-button sdoa-button--secondary sdoa-button--md">Apply to Chat</button>
         </div>
       </div>
 
-      <div class="sidebar-section">
-        <div class="section-title">
-          Files <span id="fileCount" class="count-badge">0</span>
+      <div class="sdoa-panel__section">
+        <div class="sdoa-panel__section-title">
+          <span><span style="font-size:14px;">🛠</span> QUICK ACTIONS</span>
         </div>
-        <ul id="fileList" class="list small"></ul>
-        <div id="fileListEmpty" class="list-empty">No files attached</div>
-      </div>
-
-      <div class="sidebar-section">
-        <div class="section-title">Quick Actions</div>
-        <div class="action-list">
-          <button class="action-item" data-action="image">🖼 Prompt Creator</button>
-          <button class="action-item" data-action="image_gen">🖼️ Generate Image</button>
-          <button class="action-item" data-action="deepsearch">🔎 Research Assistant</button>
-          <button class="action-item" data-action="podcast">🎙 Script Writer</button>
-          <button class="action-item" data-action="quiz">🧠 Take a Quiz</button>
-          <button class="action-item" data-action="connectors">🔌 Connectors</button>
+        <div class="action-list" style="display:flex; flex-direction:column; gap:6px;">
+          <button class="sdoa-button sdoa-button--ghost sdoa-button--sm" style="justify-content:flex-start; color:var(--text-muted);" data-action="image">🖼 Prompt Creator</button>
+          <button class="sdoa-button sdoa-button--ghost sdoa-button--sm" style="justify-content:flex-start; color:var(--text-muted);" data-action="image_gen">🖼️ Generate Image</button>
+          <button class="sdoa-button sdoa-button--ghost sdoa-button--sm" style="justify-content:flex-start; color:var(--text-muted);" data-action="deepsearch">🔎 Research Assistant</button>
+          <button class="sdoa-button sdoa-button--ghost sdoa-button--sm" style="justify-content:flex-start; color:var(--text-muted);" data-action="gdrive">📁 Google Drive</button>
         </div>
       </div>
 
-      <div class="sidebar-section">
-        <div class="section-title">Backend</div>
-        <div class="status-row">
-          <span class="status-dot" id="statusDot"></span>
-          <span id="sidebarStatusText">Connecting…</span>
+      <div class="sdoa-panel__section">
+        <div class="sdoa-panel__section-title">
+          <span><span style="font-size:14px;">📡</span> SYSTEM STATUS</span>
+        </div>
+        <div class="status-row" id="statusRow" style="display:flex; align-items:center; gap:8px; font-size:12px; padding:4px 0;">
+          <span class="sdoa-status-dot taury" id="statusDot"></span>
+          <span id="sidebarStatusText" style="color:var(--text-muted);">Tauri IPC</span>
+        </div>
+        
+        <div style="margin-top:16px;">
+          <div style="font-size:10px; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; font-weight:700;">Routing Mode</div>
+          <div style="display:flex; border:1px solid var(--border-subtle); border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.2);">
+            <button id="sidebarModeSingle" class="sdoa-button sdoa-button--ghost sdoa-button--sm" style="flex:1; border-radius:0; padding:8px;">Single</button>
+            <button id="sidebarModeMulti" class="sdoa-button sdoa-button--ghost sdoa-button--sm" style="flex:1; border-radius:0; border-left:1px solid var(--border-subtle); padding:8px;">Multi</button>
+          </div>
+        </div>
+
+        <div style="margin-top:12px; display:flex; gap:6px;">
+          <button id="sidebarRestartBackend" class="sdoa-button sdoa-button--secondary sdoa-button--sm" style="flex:1;">↺ Sidecar</button>
+          <button id="sidebarReloadUI" class="sdoa-button sdoa-button--secondary sdoa-button--sm" style="flex:1;">↺ UI</button>
         </div>
       </div>
-
     </aside>
-
-  </div>
-
-  <!-- SHORTCUT OVERLAY -->
-  <div id="shortcutOverlay" class="hidden">
-    <div class="overlay-content">
-      <h2>Keyboard Shortcuts</h2>
-      <ul>
-        <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> – Send message</li>
-        <li><kbd>Shift</kbd>+<kbd>Enter</kbd> – Newline</li>
-        <li><kbd>Ctrl</kbd>+<kbd>K</kbd> – Command palette</li>
-        <li><kbd>Ctrl</kbd>+<kbd>/</kbd> – Toggle split screen</li>
-        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> – New project</li>
-        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> – New chat</li>
-        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> – Focus OTFMS</li>
-        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> – Settings</li>
-        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> – Attach file</li>
-        <li><kbd>Alt</kbd>+<kbd>F</kbd> – Attach folder (recursive)</li>
-        <li><kbd>Esc</kbd> – Close overlay</li>
-      </ul>
+    
+    <!-- OVERLAYS -->
+    <div id="newProjectOverlay" class="sdoa-modal-overlay hidden">
+        <div class="sdoa-modal sdoa-modal--sm">
+            <div class="sdoa-modal__header">
+                <h2 class="sdoa-modal__title">New Project</h2>
+                <button class="sdoa-modal__close" id="npCloseBtn">×</button>
+            </div>
+            <div class="sdoa-modal__body">
+                <div class="sdoa-input-group">
+                    <label class="sdoa-input__label">Project Name</label>
+                    <input type="text" id="npName" class="sdoa-input" placeholder="e.g. My Website" />
+                </div>
+            </div>
+            <div class="sdoa-modal__footer">
+                <button id="npCancelBtn" class="sdoa-button sdoa-button--ghost sdoa-button--md">Cancel</button>
+                <button id="npCreateBtn" class="sdoa-button sdoa-button--primary sdoa-button--md">Create Project</button>
+            </div>
+        </div>
     </div>
+
   </div>
 
-  <!-- SETTINGS MODAL -->
-  <div id="settingsOverlay" class="settings-overlay hidden">
-    <div class="settings-panel">
-      <div class="settings-header">
-        <h2>Settings</h2>
-        <button id="settingsCloseBtn" class="icon-btn" title="Close">&times;</button>
-      </div>
-      <div class="settings-nav">
-        <button class="settings-nav-btn active" data-section="apiKeys">API Keys</button>
-        <button class="settings-nav-btn" data-section="models">Models</button>
-        <button class="settings-nav-btn" data-section="inventory">Inventory</button>
-        <button class="settings-nav-btn" data-section="profiles">Profiles</button>
-        <button class="settings-nav-btn" data-section="ingestion">Ingestion</button>
-        <button class="settings-nav-btn" data-section="backend">Backend</button>
-        <button class="settings-nav-btn" data-section="spellcheck">Spellcheck</button>
-        <button class="settings-nav-btn" data-section="advanced">Advanced</button>
-      </div>
-      <div class="settings-content">
-        <div id="settings-apiKeys" class="settings-section active">
-          <h3>API Keys</h3>
-          <p style="font-size:12px;color:#888;margin-top:-8px;margin-bottom:16px;">Enter your API keys. Keys are tested against the provider's live API when you click Test.</p>
-          <div class="setting-row">
-            <label for="apiKey-anthropic">Anthropic</label>
-            <div class="input-with-actions">
-              <input type="password" id="apiKey-anthropic" class="settings-input" placeholder="sk-ant-..." autocomplete="off" />
-              <button class="test-key-btn" data-provider="anthropic">Test</button>
-              <span id="apiKey-anthropic-indicator" style="margin-left:8px;font-size:12px;"></span>
-            </div>
-          </div>
-          <div class="setting-row">
-            <label for="apiKey-openai">OpenAI</label>
-            <div class="input-with-actions">
-              <input type="password" id="apiKey-openai" class="settings-input" placeholder="sk-..." autocomplete="off" />
-              <button class="test-key-btn" data-provider="openai">Test</button>
-              <span id="apiKey-openai-indicator" style="margin-left:8px;font-size:12px;"></span>
-            </div>
-          </div>
-          <div class="setting-row">
-            <label for="apiKey-openrouter">OpenRouter</label>
-            <div class="input-with-actions">
-              <input type="password" id="apiKey-openrouter" class="settings-input" placeholder="sk-or-..." autocomplete="off" />
-              <button class="test-key-btn" data-provider="openrouter">Test</button>
-            </div>
-          </div>
-        </div>
+  <!-- SDOA v4: Core Infrastructure -->
+  <script src="/lib/tauri-utils.js"></script>
+  <script src="/lib/EventBus.ui.js"></script>
+  <script src="/adapters/StateStore.adapter.js"></script>
+  <script src="/services/ModuleLoader.service.js"></script>
 
-        <div id="settings-models" class="settings-section">
-          <h3>Model Management</h3>
-          <p style="font-size:12px;color:#888;margin-top:-8px;margin-bottom:16px;">Enable or disable models. At least one must be enabled.</p>
-          <div id="modelList"></div>
-          <div class="setting-row" style="margin-top:16px;">
-            <label for="defaultModelSelect">Default Model</label>
-            <select id="defaultModelSelect" class="settings-select"></select>
-          </div>
-          <div class="setting-row">
-            <label for="codingModelSelect">Coding Model</label>
-            <select id="codingModelSelect" class="settings-select"></select>
-          </div>
-          <div class="setting-row" style="flex-direction:column;align-items:flex-start;margin-top:16px;">
-            <label style="margin-bottom:6px;">Failover Models <span style="color:#666;font-size:11px;font-weight:normal;">(tried in order on rate limit / server error)</span></label>
-            <div id="failoverCheckboxes"></div>
-          </div>
-          <div class="setting-row" style="flex-direction:column;align-items:flex-start;margin-top:16px;">
-            <label style="margin-bottom:6px;">Import Model List</label>
-            <div style="display:flex;gap:8px;align-items:flex-start;">
-              <textarea id="modelImportList" rows="4" style="flex:1;min-width:200px;font-family:monospace;font-size:13px;padding:8px;" placeholder="One model per line or comma-separated&#10;e.g.&#10;nvidia/nemotron-3-super-120b-a12b:free&#10;nvidia/nemotron-3-nano-30b-a3b:free&#10;openai/gpt-oss-120b:free"></textarea>
-              <button id="modelImportBtn" class="primary">Import List</button>
-            </div>
-            <div id="modelImportStatus" style="margin-top:8px;font-size:12px;color:#888;"></div>
-          </div>
-        </div>
+  <!-- SDOA v4: Primitives -->
+  <script src="/primitives/Button/Button.prim.js"></script>
+  <script src="/primitives/Toast/Toast.prim.js"></script>
+  <script src="/primitives/Input/Input.prim.js"></script>
+  <script src="/primitives/Panel/Panel.prim.js"></script>
+  <script src="/primitives/Modal/Modal.prim.js"></script>
+  <script src="/primitives/TabGroup/TabGroup.prim.js"></script>
+  <script src="/primitives/List/List.prim.js"></script>
+  <script src="/primitives/Form/Form.prim.js"></script>
+  <script src="/primitives/Badge/Badge.prim.js"></script>
+  <script src="/primitives/Spinner/Spinner.prim.js"></script>
+  <script src="/primitives/EmptyState/EmptyState.prim.js"></script>
+  <script src="/primitives/Toolbar/Toolbar.prim.js"></script>
+  <script src="/primitives/ContextMenu/ContextMenu.prim.js"></script>
+  <script src="/primitives/Toggle/Toggle.prim.js"></script>
+  <script src="/primitives/Select/Select.prim.js"></script>
 
-        <div id="settings-inventory" class="settings-section">
-          <h3>Model Inventory &amp; Archetypes</h3>
-          <p style="font-size:12px;color:#888;margin-top:-8px;margin-bottom:12px;">
-            Manage all available models by category and activate archetype profiles.
-          </p>
-          <div id="modelManagerContainer" style="height:520px;overflow:hidden;"></div>
-        </div>
+  <!-- SDOA v4: Adapters & Bridges -->
+  <script src="/modules/adapters/BackendConnector.ui.js"></script>
+  <script src="/modules/adapters/LlmPolicyEngine.ui.js"></script>
+  <script src="/modules/adapters/QmdAdapter.ui.js"></script>
+  <script src="/modules/bridges/LlmBridge.ui.js"></script>
 
-        <div id="settings-profiles" class="settings-section">
-          <h3>Profile Management</h3>
-          <div class="setting-row">
-            <label for="defaultProfile">Default AI Profile</label>
-            <select id="defaultProfile" class="settings-select"></select>
-          </div>
-          <div class="setting-row">
-            <label for="fallbackProfile">Fallback Profile</label>
-            <select id="fallbackProfile" class="settings-select"></select>
-          </div>
-          <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px;">
-            <label style="font-weight:600;font-size:13px;">Archetypes</label>
-            <div id="archetypeList" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-            <p style="font-size:11px;color:#666;margin:0;">Archetypes are built-in AI personas. Selecting one as your default profile activates its character, voice, and model preferences.</p>
-          </div>
-        </div>
+  <!-- SDOA v4: Features -->
+  <script src="/features/FileExplorer/FileExplorer.feature.js"></script>
+  <script src="/features/Settings/Settings.feature.js"></script>
+  <script src="/features/ProjectManager/ProjectManager.feature.js"></script>
+  <script src="/features/ModelManager/ModelManager.feature.js"></script>
+  <script src="/features/Chat/Chat.feature.js"></script>
+  <script src="/features/PartnerTicker/PartnerTicker.feature.js"></script>
+  <script src="/features/AppShell/AppShell.feature.js"></script>
 
-        <div id="settings-ingestion" class="settings-section">
-          <h3>Folder Ingestion</h3>
-          <div class="setting-row">
-            <label for="maxDepth">Max Depth</label>
-            <input type="number" id="maxDepth" class="settings-input" min="1" max="10" value="4" />
-          </div>
-          <div class="setting-row">
-            <label for="maxFileSizeMB">Max File Size (MB)</label>
-            <input type="number" id="maxFileSizeMB" class="settings-input" min="1" max="100" value="10" />
-          </div>
-          <div class="setting-row" style="flex-direction:column;align-items:flex-start;">
-            <label style="margin-bottom:8px;">Supported Extensions</label>
-            <div id="extensionCheckboxes"></div>
-          </div>
-        </div>
-
-        <div id="settings-backend" class="settings-section">
-          <h3>Backend Tuning</h3>
-          <div class="setting-row">
-            <label for="timeoutMs">Request Timeout (ms)</label>
-            <input type="number" id="timeoutMs" class="settings-input" min="5000" max="120000" value="30000" />
-          </div>
-          <div class="setting-row">
-            <label for="retryCount">Retry Count</label>
-            <input type="number" id="retryCount" class="settings-input" min="0" max="10" value="3" />
-          </div>
-        </div>
-
-        <div id="settings-spellcheck" class="settings-section">
-          <h3>Spellcheck</h3>
-          <div class="setting-row">
-            <label>Enable by Default</label>
-            <label class="toggle-switch">
-              <input type="checkbox" id="spellcheckEnabled" checked />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-        </div>
-
-        <div id="settings-advanced" class="settings-section">
-          <h3>Advanced</h3>
-          <div class="setting-row">
-            <label>Debug Logging</label>
-            <label class="toggle-switch">
-              <input type="checkbox" id="debugLogging" />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-          <div class="setting-row">
-            <label>Export Settings</label>
-            <button id="exportSettingsBtn" class="secondary">Export JSON</button>
-          </div>
-          <div class="setting-row">
-            <label>Import Settings</label>
-            <button id="importSettingsBtn" class="secondary">Import JSON</button>
-          </div>
-        </div>
-      </div>
-      <div class="settings-footer">
-        <button id="settingsSaveBtn" class="primary">Save Settings</button>
-        <button id="settingsCancelBtn" class="secondary">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- FIRST-RUN WIZARD -->
-  <div id="wizardOverlay" class="wizard-overlay hidden">
-    <div class="wizard-panel">
-
-      <!-- Step 0: choice screen — shown before the stepped wizard -->
-      <div id="wizardStep0" class="wizard-step active">
-        <div class="wizard-icon">&#9733;</div>
-        <h2>Welcome to ProtoAI</h2>
-        <p>Would you like to run the setup wizard to configure your API keys and default model?</p>
-        <p style="font-size:12px;color:#888;">You can always configure these later via <b>Ctrl+Shift+S</b>.</p>
-        <div style="display:flex;gap:10px;margin-top:20px;">
-          <button id="wizardChooseManual" class="secondary" style="flex:1;">Skip — Set Up Manually</button>
-          <button id="wizardChooseSetup" class="primary" style="flex:1;">Run Setup Wizard</button>
-        </div>
-      </div>
-
-      <div class="wizard-dots" id="wizardDots" style="display:none;">
-        <span class="wizard-dot active"></span>
-        <span class="wizard-dot"></span>
-        <span class="wizard-dot"></span>
-      </div>
-
-      <div id="wizardStep1" class="wizard-step">
-        <div class="wizard-icon">&#9733;</div>
-        <h2>Welcome to ProtoAI</h2>
-        <p>Let's get you set up. You'll configure your API keys and pick a default model — and you can always change these later in Settings.</p>
-      </div>
-
-      <div id="wizardStep2" class="wizard-step">
-        <h2>API Keys</h2>
-        <p style="font-size:13px;color:#888;margin-top:-8px;">At least one API key is recommended. OpenRouter provides free models if you don't have others.</p>
-        <div class="setting-row" style="margin-top:16px;">
-          <label for="wiz-apiKey-anthropic" style="font-size:13px;">Anthropic <span style="color:#666;font-size:11px;">(Claude models)</span></label>
-          <div class="input-with-actions">
-            <input type="password" id="wiz-apiKey-anthropic" class="settings-input" placeholder="sk-ant-..." autocomplete="off" />
-            <button class="test-key-btn" data-provider="anthropic">Test</button>
-          </div>
-        </div>
-        <div class="setting-row">
-          <label for="wiz-apiKey-openai" style="font-size:13px;">OpenAI <span style="color:#666;font-size:11px;">(GPT-4o models)</span></label>
-          <div class="input-with-actions">
-            <input type="password" id="wiz-apiKey-openai" class="settings-input" placeholder="sk-..." autocomplete="off" />
-            <button class="test-key-btn" data-provider="openai">Test</button>
-          </div>
-        </div>
-        <div class="setting-row">
-          <label for="wiz-apiKey-openrouter" style="font-size:13px;">OpenRouter <span style="color:#666;font-size:11px;">(free models available)</span></label>
-          <div class="input-with-actions">
-            <input type="password" id="wiz-apiKey-openrouter" class="settings-input" placeholder="sk-or-..." autocomplete="off" />
-            <button class="test-key-btn" data-provider="openrouter">Test</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="wizardStep3" class="wizard-step">
-        <div class="wizard-icon">&#9989;</div>
-        <h2>You're All Set</h2>
-        <p>Your keys and preferences are saved. The models you enabled will appear in the chat dropdown. You can always come back here via <b>Ctrl+Shift+S</b> or the command palette.</p>
-        <p style="font-size:12px;color:#888;">Pro tip: attach folders with <b>Alt+F</b> or click &#128206; in the input bar.</p>
-      </div>
-
-      <div class="wizard-footer" id="wizardFooter" style="display:none;">
-        <button id="wizardBackBtn" class="secondary" style="visibility:hidden;">Back</button>
-        <div style="flex:1;"></div>
-        <button id="wizardSkipBtn" class="secondary">Skip</button>
-        <button id="wizardNextBtn" class="primary">Next</button>
-      </div>
-    </div>
-  </div>
-
-
-
-<!-- UTILITIES — must load first -->
-<script src="/lib/tauri-utils.js"></script>
-<script src="/lib/EventBus.ui.js"></script>
-
-<!-- CORE ADAPTERS — dependency order: BackendConnector first, then consumers -->
-<script src="/modules/adapters/BackendConnector.ui.js"></script>
-<script src="/modules/adapters/LlmPolicyEngine.ui.js"></script>
-<script src="/modules/adapters/QmdAdapter.ui.js"></script>
-<script src="/modules/bridges/LlmBridge.ui.js"></script>
-<script src="/modules/components/FileManager.ui.js"></script>
-<script src="/modules/components/ModelManager.ui.js"></script>
-
-<!-- UI PANELS -->
-<script src="/modules/ui/settings.ui.js"></script>
-<script src="/modules/ui/updater.ui.js"></script>
-<script src="/modules/ui/PrimaryPanel.ui.js"></script>
-<script src="/modules/ui/ChatBehavior.ui.js"></script>
-<script src="/modules/ui/SendButton.ui.js"></script>
-<script src="/modules/components/FileTree.ui.js"></script>
-<script src="/modules/components/FileList.ui.js"></script>
-<script src="/modules/components/ManifestPanel.ui.js"></script>
-<script src="/modules/components/FileManager.ui.js"></script>
-<script src="/modules/ui/SearchHistory.ui.js"></script>
-<script src="/modules/ui/SendButton.ui.js"></script>
-
-<!-- MAIN APP -->
-<script src="/lib/marked.min.js"></script>
-<script src="/app.js"></script>
-
-<!-- LOCAL LIBRARIES — Monaco last, always -->
-<script src="/lib/monaco/vs/loader.js"></script>
+  <!-- External Deps -->
+  <script src="/lib/marked.min.js"></script>
+  <script src="/app.js"></script>
+  <script src="/lib/monaco/vs/loader.js"></script>
 
 </body>
 </html>

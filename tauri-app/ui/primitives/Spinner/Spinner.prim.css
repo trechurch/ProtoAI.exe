@@ -1,0 +1,9 @@
+/* Last modified: 2026-05-04 03:11 UTC */
+/* Spinner.prim.css — SDOA v4 */
+.sdoa-spinner { display: inline-flex; align-items: center; gap: var(--space-sm); }
+.sdoa-spinner__ring { border: 2px solid var(--border-subtle); border-top-color: var(--accent); border-radius: 50%; animation: sdoa-spin 0.7s linear infinite; }
+.sdoa-spinner--sm .sdoa-spinner__ring { width: 14px; height: 14px; }
+.sdoa-spinner--md .sdoa-spinner__ring { width: 22px; height: 22px; }
+.sdoa-spinner--lg .sdoa-spinner__ring { width: 34px; height: 34px; border-width: 3px; }
+.sdoa-spinner__label { font-size: var(--text-sm); color: var(--text-muted); }
+@keyframes sdoa-spin { to { transform: rotate(360deg); } }

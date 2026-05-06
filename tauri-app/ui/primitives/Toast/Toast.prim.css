@@ -1,0 +1,111 @@
+/* ============================================================
+/* Last modified: 2026-05-04 03:11 UTC */
+   Toast.prim.css — SDOA v4 Primitive Styles
+   Co-located with Toast.prim.js
+   ============================================================ */
+
+/* ── Container ─────────────────────────────────────────────── */
+.sdoa-toast-container {
+  position: fixed;
+  top: var(--space-md);
+  right: var(--space-md);
+  z-index: var(--z-toast, 300);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  pointer-events: none;
+  max-width: 420px;
+  width: 100%;
+}
+
+/* ── Individual Toast ──────────────────────────────────────── */
+.sdoa-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateX(100%);
+  transition: all var(--duration-slow, 300ms) var(--ease-default);
+  backdrop-filter: blur(12px);
+}
+
+.sdoa-toast--visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.sdoa-toast--exit {
+  opacity: 0;
+  transform: translateX(100%) scale(0.95);
+}
+
+/* ── Type Variants ─────────────────────────────────────────── */
+.sdoa-toast--success {
+  border-left: 3px solid var(--color-success);
+}
+
+.sdoa-toast--error {
+  border-left: 3px solid var(--color-error);
+}
+
+.sdoa-toast--warning {
+  border-left: 3px solid var(--color-warning);
+}
+
+.sdoa-toast--info {
+  border-left: 3px solid var(--color-info);
+}
+
+/* ── Inner Elements ────────────────────────────────────────── */
+.sdoa-toast__icon {
+  flex-shrink: 0;
+  font-size: var(--text-base);
+  line-height: 1;
+}
+
+.sdoa-toast__message {
+  flex: 1;
+  min-width: 0;
+  line-height: var(--line-height);
+}
+
+.sdoa-toast__action {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+
+.sdoa-toast__action:hover {
+  background: var(--bg-hover);
+}
+
+.sdoa-toast__close {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color var(--duration-fast);
+}
+
+.sdoa-toast__close:hover {
+  color: var(--text);
+}

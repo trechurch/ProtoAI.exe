@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SDOA v4 Primitives Test</title>
+
+  <!-- SDOA v4: Design Tokens -->
+  <link rel="stylesheet" href="tokens.css" />
+  
+  <!-- SDOA v4: Primitive Styles -->
+  <link rel="stylesheet" href="primitives/Button/Button.prim.css" />
+  <link rel="stylesheet" href="primitives/Toast/Toast.prim.css" />
+  <link rel="stylesheet" href="primitives/Input/Input.prim.css" />
+  <link rel="stylesheet" href="primitives/Panel/Panel.prim.css" />
+  <link rel="stylesheet" href="primitives/Modal/Modal.prim.css" />
+  <link rel="stylesheet" href="primitives/TabGroup/TabGroup.prim.css" />
+  <link rel="stylesheet" href="primitives/List/List.prim.css" />
+  <link rel="stylesheet" href="primitives/Form/Form.prim.css" />
+  <link rel="stylesheet" href="primitives/Badge/Badge.prim.css" />
+  <link rel="stylesheet" href="primitives/Spinner/Spinner.prim.css" />
+  <link rel="stylesheet" href="primitives/EmptyState/EmptyState.prim.css" />
+  <link rel="stylesheet" href="primitives/Toolbar/Toolbar.prim.css" />
+  <link rel="stylesheet" href="primitives/ContextMenu/ContextMenu.prim.css" />
+  <link rel="stylesheet" href="primitives/Toggle/Toggle.prim.css" />
+
+  <style>
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      margin: 0;
+      padding: var(--space-xl);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: var(--space-xl);
+    }
+    .section {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: var(--space-lg);
+    }
+    .section h2 { margin-top: 0; font-size: var(--text-lg); border-bottom: 1px solid var(--border-subtle); padding-bottom: var(--space-sm); }
+    .demo-row { display: flex; gap: var(--space-sm); align-items: center; flex-wrap: wrap; margin-bottom: var(--space-md); }
+  </style>
+</head>
+<body>
+
+  <h1>SDOA v4 Primitives Sandbox</h1>
+  <p>If you see styled components below, the v4 token and primitive CSS/JS pipeline is working.</p>
+
+  <div class="grid">
+    <!-- Buttons -->
+    <div class="section" id="sec-buttons"><h2>Buttons</h2></div>
+    
+    <!-- Badges & Spinners -->
+    <div class="section" id="sec-indicators"><h2>Indicators</h2></div>
+    
+    <!-- Inputs & Toggles -->
+    <div class="section" id="sec-inputs"><h2>Inputs</h2></div>
+    
+    <!-- Interactive (Modals/Toasts/Menus) -->
+    <div class="section" id="sec-interactive"><h2>Interactive</h2></div>
+  </div>
+
+  <!-- SDOA v4: Foundations -->
+  <script src="adapters/StateStore.adapter.js"></script>
+  <script src="services/ModuleLoader.service.js"></script>
+
+  <!-- SDOA v4: Primitives -->
+  <script src="primitives/Button/Button.prim.js"></script>
+  <script src="primitives/Toast/Toast.prim.js"></script>
+  <script src="primitives/Input/Input.prim.js"></script>
+  <script src="primitives/Panel/Panel.prim.js"></script>
+  <script src="primitives/Modal/Modal.prim.js"></script>
+  <script src="primitives/TabGroup/TabGroup.prim.js"></script>
+  <script src="primitives/List/List.prim.js"></script>
+  <script src="primitives/Form/Form.prim.js"></script>
+  <script src="primitives/Badge/Badge.prim.js"></script>
+  <script src="primitives/Spinner/Spinner.prim.js"></script>
+  <script src="primitives/EmptyState/EmptyState.prim.js"></script>
+  <script src="primitives/Toolbar/Toolbar.prim.js"></script>
+  <script src="primitives/ContextMenu/ContextMenu.prim.js"></script>
+  <script src="primitives/Toggle/Toggle.prim.js"></script>
+  <script src="primitives/Select/Select.prim.js"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      // Buttons
+      const btnSec = document.getElementById("sec-buttons");
+      const r1 = document.createElement("div"); r1.className = "demo-row";
+      r1.appendChild(ButtonPrim.create({ label: "Primary", variant: "primary" }));
+      r1.appendChild(ButtonPrim.create({ label: "Secondary", variant: "secondary" }));
+      r1.appendChild(ButtonPrim.create({ label: "Ghost", variant: "ghost" }));
+      r1.appendChild(ButtonPrim.create({ label: "Danger", variant: "danger" }));
+      const r2 = document.createElement("div"); r2.className = "demo-row";
+      r2.appendChild(ButtonPrim.create({ label: "Small", size: "sm" }));
+      r2.appendChild(ButtonPrim.create({ label: "Medium", size: "md" }));
+      r2.appendChild(ButtonPrim.create({ label: "Large", size: "lg" }));
+      const r3 = document.createElement("div"); r3.className = "demo-row";
+      r3.appendChild(ButtonPrim.create({ icon: "⚙️", variant: "icon" }));
+      r3.appendChild(ButtonPrim.create({ label: "Loading", loading: true, variant: "primary" }));
+      r3.appendChild(ButtonPrim.create({ label: "Disabled", disabled: true }));
+      btnSec.append(r1, r2, r3);
+
+      // Indicators
+      const indSec = document.getElementById("sec-indicators");
+      const r4 = document.createElement("div"); r4.className = "demo-row";
+      r4.appendChild(BadgePrim.create({ text: "Default" }));
+      r4.appendChild(BadgePrim.create({ text: "Success", variant: "success" }));
+      r4.appendChild(BadgePrim.create({ text: "Error", variant: "error" }));
+      r4.appendChild(BadgePrim.create({ text: "Accent", variant: "accent" }));
+      const r5 = document.createElement("div"); r5.className = "demo-row";
+      r5.appendChild(SpinnerPrim.create({ size: "sm" }));
+      r5.appendChild(SpinnerPrim.create({ size: "md" }));
+      r5.appendChild(SpinnerPrim.create({ size: "lg", label: "Loading..." }));
+      indSec.append(r4, r5);
+
+      // Inputs
+      const inpSec = document.getElementById("sec-inputs");
+      inpSec.appendChild(InputPrim.create({ placeholder: "Text input...", label: "Username" }));
+      inpSec.appendChild(document.createElement("br"));
+      inpSec.appendChild(TogglePrim.create({ label: "Enable features", checked: true }));
+      inpSec.appendChild(document.createElement("br"));
+      inpSec.appendChild(SelectPrim.create({ label: "Model", options: ["gpt-4", "claude-3"] }));
+
+      // Interactive
+      const intSec = document.getElementById("sec-interactive");
+      const r6 = document.createElement("div"); r6.className = "demo-row";
+      
+      const toastBtn = ButtonPrim.create({ label: "Show Toast", variant: "secondary", onClick: () => ToastPrim.show("Action successful!", "success") });
+      
+      const modalBtn = ButtonPrim.create({ label: "Open Modal", variant: "secondary", onClick: () => {
+        const modal = ModalPrim.create({ title: "Sample Modal", onClose: () => modal.remove() });
+        modal._sdoaBody.innerHTML = "<p>This is a dynamically created SDOA v4 modal.</p>";
+        ModalPrim.open(modal);
+      }});
+
+      const menuBtn = ButtonPrim.create({ label: "Right Click Me", variant: "secondary" });
+      menuBtn.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        ContextMenuPrim.show({
+          position: { x: e.clientX, y: e.clientY },
+          items: [
+            { label: "Copy", icon: "📋", shortcut: "Ctrl+C" },
+            { separator: true },
+            { label: "Delete", icon: "🗑️", danger: true }
+          ]
+        });
+      });
+
+      r6.append(toastBtn, modalBtn, menuBtn);
+      intSec.appendChild(r6);
+    });
+  </script>
+</body>
+</html>

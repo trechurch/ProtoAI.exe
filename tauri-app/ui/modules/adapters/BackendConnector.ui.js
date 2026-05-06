@@ -1,83 +1,35 @@
 // ============================================================
 // BackendConnector.ui.js — UI Adapter (Browser-Safe)
-// version: 3.2.0
+// version: 3.2.3
+// Last modified: 2026-05-04 03:11 UTC
 // depends: tauri-utils.js (must load first)
 // ============================================================
 
 (function () {
     "use strict";
 
-    const { domReady } = window.TauriUtils;
-
-    // ── BackendConnector.ui ───────────────────────────────────
-    // Browser-safe UI adapter for Tauri IPC.
-    // All workflow names are mapped to their exact Rust command
-    // as registered in commands.rs. There is no generic
-    // run_workflow command — every call must be explicit.
-    // ── end of BackendConnector.ui ───────────────────────────
-
     class BackendConnector {
-
-        // ── SDOA v3.2 MANIFEST ───────────────────────────────
-        static MANIFEST = {
-            id:          "BackendConnector.ui",
-            type:        "adapter",
-            runtime:     "Browser",
-            version:     "3.2.0",
-            capabilities: [
-                "runWorkflow",
-                "backend-status",
-                "tauri-ipc",
-                "transport.reconnect",
-                "event.emit"
-            ],
-            dependencies: ["tauri-utils.js"],
-            docs: {
-                description: "Browser-safe Tauri IPC adapter. Maps all workflow names to registered Rust commands in commands.rs. No generic run_workflow — every command is explicit.",
-                input:  { workflow: "string", payload: "object?" },
-                output: "Promise<any>",
-                author: "ProtoAI team",
-                sdoa_compatibility: `
-                    SDOA Compatibility Contract:
-                    - v1.2 Manifest is minimum requirement.
-                    - v3.x adds actions surface additively.
-                    - Lower versions ignore unknown fields.
-                    - Higher versions preserve old semantics.
-                    - All versions forward/backward compatible.
-                `
-            },
-            actions: {
-                commands: {
-                    runWorkflow:      { description: "Execute a backend workflow via Tauri IPC.", input: { workflow: "string", payload: "object?" }, output: "Promise<any>" },
-                    reconnect:        { description: "Attempt to reconnect the Tauri sidecar.",  input: {}, output: "boolean" },
-                    getBackendStatus: { description: "Query backend engine status.",              input: {}, output: "string" }
-                },
-                triggers: {
-                    backendCrashed:   { description: "Fires when the Tauri sidecar reports a crash." },
-                    backendRecovered: { description: "Fires when the backend returns to ready state." }
-                },
-                emits: {
-                    statusChanged:  { description: "Emits backend status updates.", payload: { mode: "string", detail: "string?" } },
-                    workflowFailed: { description: "Emits when a workflow fails.",  payload: { workflow: "string", error: "string" } }
-                },
-                workflows: {
-                    runWorkflow:      { description: "Primary workflow execution entrypoint.", input: { name: "string", payload: "object?" }, output: "Promise<any>" },
-                    getBackendStatus: { description: "Wrapper for engine_status.",             input: {}, output: "string" }
-                }
-            }
-        };
-        // ── end of SDOA v3.2 MANIFEST ────────────────────────
 
         constructor() {
             this.status          = "connecting";
             this.listeners       = [];
+            // Safe check for Tauri core
             this.TAURI_AVAILABLE = !!(window.__TAURI__?.core?.invoke);
 
             console.log(`[BackendConnector.ui] Tauri IPC: ${this.TAURI_AVAILABLE ? "available" : "unavailable"}`);
-            this._initStatusPolling();
+            
+            // Wait for DOM to ensure status elements are available before first update
+            if (window.TauriUtils?.domReady) {
+                window.TauriUtils.domReady(() => this._init());
+            } else {
+                // Fallback if TauriUtils missing or not yet loaded
+                document.addEventListener("DOMContentLoaded", () => this._init());
+            }
         }
 
-        // ── event emitter ────────────────────────────────────
+        _init() {
+            this._initStatusPolling();
+        }
 
         on(event, handler)  { this.listeners.push({ event, handler }); }
 
@@ -97,31 +49,68 @@
             }
         }
 
-        // ── end of event emitter ─────────────────────────────
-
-        // ── setBackendStatus ─────────────────────────────────
-
         setBackendStatus(mode, detail = "") {
             this.status = mode;
 
-            const labels      = { tauri: "Backend: Tauri IPC (sidecar active)", http: "Backend: initializing…", crashed: "Sidecar crashed. Use Reconnect.", unavailable: "Backend: sidecar initializing…", offline: "Backend: offline" };
-            const shortLabels = { tauri: "Tauri IPC", http: "Starting…", crashed: "Crashed", unavailable: "Starting…", offline: "Offline" };
+            const labels      = { 
+                tauri: "Backend: Tauri IPC (sidecar active)", 
+                initializing: "Backend: sidecar starting...",
+                crashed: "Sidecar crashed. Click to reconnect.", 
+                unavailable: "Backend: initializing...", 
+                offline: "Backend: offline — click to reconnect" 
+            };
+            const shortLabels = { 
+                tauri: "Tauri IPC", 
+                initializing: "Starting...", 
+                crashed: "Crashed", 
+                unavailable: "Starting...", 
+                offline: "Offline" 
+            };
 
             const text      = labels[mode]      ?? mode;
             const shortText = shortLabels[mode] ?? mode;
 
-            const badge = document.getElementById("currentProfileName");
-            if (badge) badge.title = detail ? `${text}\n${detail}` : text;
-
             const dot   = document.getElementById("statusDot");
             const label = document.getElementById("sidebarStatusText");
-            if (dot)   dot.className    = `status-dot ${mode}`;
+            const row   = document.getElementById("statusRow");
+            
+            if (dot)   dot.className     = `status-dot ${mode}`;
             if (label) label.textContent = detail ? `${shortText} (${detail})` : shortText;
+
+            const reconnectable = (mode === "offline" || mode === "crashed" || mode === "unavailable");
+            if (row) {
+                row.classList.toggle("status-row--reconnectable", reconnectable);
+                if (reconnectable) {
+                    if (!row._reconnectHandler) {
+                        row._reconnectHandler = async () => {
+                            if (this.isReconnecting) return;
+                            this.isReconnecting = true;
+                            
+                            if (label) label.textContent = "Reconnecting...";
+                            row.classList.add("status-row--busy");
+                            
+                            try {
+                                await Promise.race([
+                                    window.__TAURI__.core.invoke("engine_reconnect"),
+                                    new Promise((_, reject) => setTimeout(() => reject(new Error("Reconnect timed out")), 10000))
+                                ]);
+                                this.setBackendStatus("tauri");
+                                this.emit("backendRecovered", {});
+                            } catch (err) {
+                                this.setBackendStatus("offline", err.message || "Failed");
+                                console.error("[BackendConnector.ui] Reconnect failed:", err);
+                            } finally {
+                                this.isReconnecting = false;
+                                row.classList.remove("status-row--busy");
+                            }
+                        };
+                        row.addEventListener("click", row._reconnectHandler);
+                    }
+                }
+            }
 
             this.emit("statusChanged", { mode, detail });
         }
-
-        // ── getBackendStatus ─────────────────────────────────
 
         async getBackendStatus() {
             if (!this.TAURI_AVAILABLE) return "offline";
@@ -129,323 +118,186 @@
             catch { return "offline"; }
         }
 
-        // ── _initStatusPolling ───────────────────────────────
-
         async _initStatusPolling() {
-            if (!this.TAURI_AVAILABLE) { this.setBackendStatus("unavailable"); return; }
-            try {
-                const status = await this.getBackendStatus();
-                this.setBackendStatus(status === "ready" ? "tauri" : "unavailable");
-            } catch {
-                this.setBackendStatus("unavailable");
-            }
-        }
-
-        // ── showReconnectButton ──────────────────────────────
-
-        showReconnectButton() {
-            if (!this.TAURI_AVAILABLE) return;
-            const container = document.getElementById("chatContainer");
-            if (!container || container.querySelector(".reconnect-btn")) return;
-
-            const btn = document.createElement("button");
-            btn.textContent   = "Reconnect Sidecar";
-            btn.className     = "secondary reconnect-btn";
-            btn.style.cssText = "margin:8px 0;display:block;";
-
-            btn.onclick = async () => {
-                btn.disabled = true; btn.textContent = "Reconnecting…";
+            if (!this.TAURI_AVAILABLE) { this.setBackendStatus("offline"); return; }
+            
+            const poll = async () => {
                 try {
-                    await window.__TAURI__.core.invoke("engine_reconnect");
-                    this.setBackendStatus("tauri");
-                    btn.remove();
-                    this.emit("backendRecovered", {});
+                    const status = await this.getBackendStatus();
+                    if (status === "ready") {
+                        this.setBackendStatus("tauri");
+                    } else if (status === "crashed") {
+                        this.setBackendStatus("crashed");
+                    } else {
+                        this.setBackendStatus("initializing");
+                    }
                 } catch (err) {
-                    btn.textContent = "Reconnect failed — try again";
-                    btn.disabled    = false;
-                    console.error("[BackendConnector.ui] Reconnect failed:", err);
+                    this.setBackendStatus("offline");
                 }
             };
-            container.appendChild(btn);
-        }
 
-        // ── invokeTauri ──────────────────────────────────────
-        // Maps workflow names to the exact Rust commands in
-        // commands.rs. No generic run_workflow exists.
-        // Unregistered workflows return null with a warning.
-        // ── end of invokeTauri ───────────────────────────────
+            await poll();
+            if (this.pollInterval) clearInterval(this.pollInterval);
+            this.pollInterval = setInterval(() => {
+                if (this.status !== "tauri") poll();
+            }, 5000);
+        }
 
         async invokeTauri(workflow, payload) {
             const inv = window.__TAURI__.core.invoke.bind(window.__TAURI__.core);
 
             switch (workflow) {
+                case "get_status":        return inv("get_status");
+                case "get_launch_flags":  return inv("get_launch_flags");
+                case "engine_status":     return inv("engine_status");
 
-                // ── engine status ─────────────────────────────
-                case "health_check":
-                case "get_status":
-                    return inv("get_status");
-
-                // ── projects ──────────────────────────────────
                 case "ListProjectsWorkflow":
-                case "engine_projects":
-                    return inv("engine_projects");
+                case "projects":
+                    return inv("engine_ipc", { msgType: "projects", payload });
 
-                // ── profiles ──────────────────────────────────
-                case "ListProfilesWorkflow":
-                case "engine_profiles":
-                    return inv("engine_profiles");
-
-                // ── history ───────────────────────────────────
                 case "LoadProjectHistoryWorkflow":
-                case "engine_history":
-                    return inv("engine_history", {
-                        project: payload?.project || ""
-                    });
+                case "history":
+                    return inv("engine_ipc", { msgType: "history", payload });
 
-                // ── chat ──────────────────────────────────────
+                case "ListProfilesWorkflow":
+                case "profiles":
+                    return inv("engine_ipc", { msgType: "profiles", payload });
+
                 case "SendMessageWorkflow":
                 case "engine_chat":
-                    return inv("engine_chat", {
-                        project: payload?.project || "",
-                        profile: payload?.profile || "",
-                        engine:  payload?.engine  || "",
-                        text:    payload?.message || payload?.text || ""
-                    });
+                    return inv("engine_ipc", { msgType: "chat", payload });
+
+                case "MultiModelSendWorkflow":
+                case "engine_multi_chat":
+                    return inv("engine_ipc", { msgType: "multi_model_send", payload });
 
                 case "SendMessageStreamWorkflow":
                 case "engine_chat_stream":
-                    return inv("engine_chat_stream", {
-                        project: payload?.project || "",
-                        profile: payload?.profile || "",
-                        engine:  payload?.engine  || "",
-                        text:    payload?.message || payload?.text || ""
-                    });
+                    return inv("engine_ipc", { msgType: "chat", payload: { ...payload, stream: true } });
 
-                // ── upload ────────────────────────────────────
                 case "UploadWorkflow":
                 case "engine_upload":
-                    return inv("engine_upload", {
-                        project:   payload?.project   || "",
-                        file_path: payload?.file_path || payload?.filename || "",
-                        content:   payload?.content   || ""
-                    });
+                case "upload":
+                    return inv("engine_ipc", { msgType: "upload", payload });
 
-                // ── ingest ────────────────────────────────────
                 case "IngestWorkflow":
                 case "engine_ingest":
-                    return inv("engine_ingest", {
-                        project: payload?.project || ""
-                    });
+                case "ingest":
+                    return inv("engine_ipc", { msgType: "ingest", payload });
 
-                // ── image gen ─────────────────────────────────
                 case "ImageGenWorkflow":
                 case "engine_image_gen":
-                    return inv("engine_image_gen", {
-                        prompt:  payload?.text    || payload?.prompt || "",
-                        project: payload?.project || ""
-                    });
+                    return inv("engine_ipc", { msgType: "image_gen", payload });
 
-                // ── deep search ───────────────────────────────
                 case "DeepSearchWorkflow":
                 case "engine_deep_search":
-                    return inv("engine_deep_search", {
-                        query: payload?.query || ""
-                    });
+                    return inv("engine_ipc", { msgType: "deep_search", payload });
 
-                // ── qmd ───────────────────────────────────────
                 case "qmd_search":
                 case "engine_qmd_search":
-                    return inv("engine_qmd_search", {
-                        query:   payload?.query   || "",
-                        project: payload?.project || ""
-                    });
+                    return inv("engine_ipc", { msgType: "qmd_search", payload });
 
                 case "qmd_index":
                 case "engine_qmd_index":
-                    return inv("engine_qmd_index", {
-                        project:   payload?.project   || "",
-                        deep_scan: payload?.deep_scan ?? false
-                    });
+                    return inv("engine_ipc", { msgType: "qmd_index", payload });
 
-                // ── settings ──────────────────────────────────
                 case "get_settings":
                 case "settings_get":
                     return inv("settings_get");
 
                 case "update_settings":
                 case "settings_set":
-                    return inv("settings_set", {
-                        key:   payload?.key   || "",
-                        value: payload?.value ?? payload
-                    });
+                    return inv("settings_set", { key: payload?.key || "", value: payload?.value ?? payload });
 
                 case "settings_test_key":
-                    return inv("settings_test_key", {
-                        provider: payload?.provider || "",
-                        key:      payload?.key      || ""
-                    });
+                    return inv("settings_test_key", { provider: payload?.provider || "", key: payload?.key || "" });
 
-                case "settings_first_run_status":
-                    return inv("settings_first_run_status");
-
-                case "settings_complete_first_run":
-                    return inv("settings_complete_first_run");
-
-                // ── policy (maps to settings) ─────────────────
                 case "get_policy":
-                    return inv("settings_get");
+                    return inv("settings_get"); 
 
                 case "update_policy":
-                    return inv("settings_set", {
-                        key:   "policy",
-                        value: payload
-                    });
+                    return inv("settings_set", { key: "policy", value: payload });
 
-                // ── filesystem ────────────────────────────────
-                case "get_project_dir":
-                    return inv("get_project_dir", {
-                        project: payload?.project || ""
-                    });
-
-                case "fs_read_file":
-                    return inv("fs_read_file", { path: payload?.path || "" });
-
-                case "fs_write_file":
-                    return inv("fs_write_file", { path: payload?.path || "", content: payload?.content || "" });
-
-                case "fs_rename":
-                    return inv("fs_rename", { old_path: payload?.old_path || "", new_path: payload?.new_path || "" });
-
-                case "fs_unlink":
-                    return inv("fs_unlink", { path: payload?.path || "" });
-
-                case "fs_mkdir":
-                    return inv("fs_mkdir", { path: payload?.path || "" });
-
-                case "fs_copy":
-                    return inv("fs_copy", { source: payload?.source || "", destination: payload?.destination || "" });
-
-                case "fs_remove":
-                    return inv("fs_remove", { path: payload?.path || "" });
-
-                case "fs_stat":
-                    return inv("fs_stat", { path: payload?.path || "" });
-
-                // ── VFS workflows (routed through engine_ipc) ───────────────
-                case "vfs_add":
-                    return inv("engine_chat", { project: payload?.project || "", profile: "_vfs_", engine: "", text: JSON.stringify({ __vfs_type: "vfs_add", ...payload }) });
-                case "vfs_list":
-                case "vfs_manifest":
-                case "vfs_remove":
-                    // These go through run_workflow fallback path via server-ipc
-                    // until a dedicated Rust command is added
-                    console.warn(`[BackendConnector.ui] VFS workflow "${workflow}" needs Rust command — using IPC passthrough`);
+                case "get_model_inventory":
+                case "save_model_inventory":
                     return null;
 
-                // ── file listing ─────────────────────────────
-                // realPath → use fast Rust fs_list_dir
-                // project-relative → route through IPC server (returns null, falls to IPC)
-                case "ListFilesWorkflow":
-                case "list_files":
-                    if (payload?.realPath) {
-                        return inv("fs_list_dir", { path: payload.realPath });
-                    }
-                    return null; // IPC server handles project-relative listing
-
-                case "FilePermissionsWorkflow":
-                case "engine_file_permissions":
-                    return null; // IPC server handles permissions
-
-                // ── search history ───────────────────────────────────
-                case "search_history":
-                    return inv("engine_ipc", { msg_type: "search_history", payload });
-
-                // ── VFS — route through engine_ipc generic passthrough ──
                 case "vfs_add":
                 case "VfsAddWorkflow":
-                    return inv("engine_ipc", { msg_type: "vfs_add", payload });
+                    return inv("engine_ipc", { msgType: "vfs_add", payload });
+
                 case "vfs_list":
                 case "VfsListWorkflow":
-                    return inv("engine_ipc", { msg_type: "vfs_list", payload });
+                    return inv("engine_ipc", { msgType: "vfs_list", payload });
+                
                 case "vfs_manifest":
                 case "VfsManifestWorkflow":
-                    return inv("engine_ipc", { msg_type: "vfs_manifest", payload });
+                    return inv("engine_ipc", { msgType: "vfs_manifest", payload });
+
+                case "vfs_remove":
+                case "VfsRemoveWorkflow":
+                    return inv("engine_ipc", { msgType: "vfs_remove", payload });
+
                 case "vfs_permissions":
                 case "VfsUpdatePermissionsWorkflow":
-                    return inv("engine_ipc", { msg_type: "vfs_permissions", payload });
-                case "list_files":
-                case "ListFilesWorkflow":
-                    if (payload?.realPath) {
-                        return inv("fs_list_dir", { path: payload.realPath });
-                    }
-                    return inv("engine_ipc", { msg_type: "list_files", payload });
+                    return inv("engine_ipc", { msgType: "vfs_permissions", payload });
 
-                // ── not registered — return null gracefully ───
-                case "get_launch_flags":
-                case "save_model_inventory":
-                case "get_model_inventory":
-                case "llm_generate":
-                case "file_read_config":
-                case "file_write_config":
-                    return null;
+                case "auto_optimize":
+                case "AutoOptimizeModelsWorkflow":
+                    return inv("engine_ipc", { msgType: "auto_optimize", payload });
 
-                // ── unknown ───────────────────────────────────
+                case "google_drive":
+                case "GoogleDriveWorkflow":
+                    return inv("engine_ipc", { msgType: "google_drive", payload });
+
+                case "get_project_dir":
+                    return inv("get_project_dir", { project: payload?.project || "" });
+                case "fs_read_file":
+                    return inv("fs_read_file", { path: payload?.path || "" });
+                case "fs_write_file":
+                    return inv("fs_write_file", { path: payload?.path || "", content: payload?.content || "" });
+                case "fs_list_dir":
+                    return inv("fs_list_dir", { path: payload?.path || "" });
+
                 default:
-                    console.warn(`[BackendConnector.ui] Unknown workflow: "${workflow}" — no matching Rust command`);
-                    return null;
+                    console.warn(`[BackendConnector.ui] Routing unknown workflow "${workflow}" through engine_ipc`);
+                    return inv("engine_ipc", { msgType: workflow, payload });
             }
         }
 
-        // ── runWorkflow ──────────────────────────────────────
-        // Primary public API. All UI modules call this.
-        // ── end of runWorkflow ───────────────────────────────
-
         async runWorkflow(name, payload = {}) {
-            if (!this.TAURI_AVAILABLE) {
-                this.setBackendStatus("offline");
-                this.emit("workflowFailed", { workflow: name, error: "Tauri IPC not available" });
-                throw new Error("[BackendConnector.ui] Tauri IPC not available");
-            }
-
+            console.log(`[BackendConnector] Running workflow: ${name}`, payload);
+            if (!this.TAURI_AVAILABLE) throw new Error("Tauri IPC not available");
             try {
                 const result = await this.invokeTauri(name, payload);
-                this.setBackendStatus("tauri");
+                console.log(`[BackendConnector] Workflow ${name} result:`, result);
+                if (this.status !== "tauri") this.setBackendStatus("tauri");
                 return result;
-
             } catch (err) {
-                const msg = String(err).toLowerCase();
-                const isTransportError =
-                    msg.includes("crash")           ||
-                    msg.includes("not ready")        ||
-                    msg.includes("sidecar")          ||
-                    msg.includes("timed out")        ||
-                    msg.includes("write to sidecar") ||
-                    msg.includes("failed to fetch");
-
-                this.emit("workflowFailed", { workflow: name, error: err.message });
-
-                if (isTransportError) {
-                    console.warn(`[BackendConnector.ui] Transport failure on "${name}":`, err?.message || String(err));
+                console.error(`[BackendConnector] Workflow "${name}" failed:`, err);
+                
+                // Auto-recovery: If the bridge is down, try to restart it once.
+                if (err && String(err).includes("Engine bridge not initialized") && !payload?._isRetry) {
+                    console.warn(`[BackendConnector] Bridge down. Attempting auto-reconnect for "${name}"...`);
                     try {
-                        const engineStatus = await window.__TAURI__.core.invoke("engine_status");
-                        if (engineStatus === "crashed") {
-                            this.setBackendStatus("crashed");
-                            this.emit("backendCrashed", {});
-                            this.showReconnectButton();
-                        }
-                    } catch (_) {}
+                        await this.invokeTauri("engine_reconnect");
+                        // Small delay to let the sidecar boot
+                        await new Promise(r => setTimeout(r, 1500));
+                        return await this.runWorkflow(name, { ...payload, _isRetry: true });
+                    } catch (reconnectErr) {
+                        console.error("[BackendConnector] Auto-reconnect failed:", reconnectErr);
+                    }
                 }
 
-                this.setBackendStatus("offline");
+                const status = await this.getBackendStatus();
+                if (status === "crashed") this.setBackendStatus("crashed");
                 throw err;
             }
         }
-
     }
-    // ── end of class BackendConnector ────────────────────────
 
-    domReady(() => {
-        window.backendConnector = new BackendConnector();
-    });
-
+    // Initialize immediately but delay DOM operations
+    window.BackendConnector = BackendConnector;
+    window.backendConnector = new BackendConnector();
+    window.backend = window.backendConnector; 
 })();

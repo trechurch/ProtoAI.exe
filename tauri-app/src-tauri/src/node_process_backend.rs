@@ -46,8 +46,8 @@ struct StreamChunkEvent {
 pub struct NodeProcessBackend {
     child: CommandChild,
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<IpcResponse>>>>,
-    /// Fires once when the sidecar process terminates.
-    exit_rx: Option<oneshot::Receiver<()>>,
+    /// Fires once when the sidecar process terminates. Returns the exit code if available.
+    exit_rx: Option<oneshot::Receiver<Option<i32>>>,
 }
 
 impl NodeProcessBackend {
@@ -67,7 +67,7 @@ impl NodeProcessBackend {
             .map_err(|e| anyhow!("Failed to resolve resource dir: {}", e))?
             .join("server");
 
-        let server_dir = if resource_server.join("server-ipc.cjs").exists() {
+        let server_dir = if resource_server.join("index.cjs").exists() {
             // Production: resources bundled by Tauri
             resource_server
         } else {
@@ -78,7 +78,7 @@ impl NodeProcessBackend {
                 env!("CARGO_MANIFEST_DIR")
             ).join("resources").join("server");
 
-            if dev_path.join("server-ipc.cjs").exists() {
+            if dev_path.join("index.cjs").exists() {
                 dev_path
             } else {
                 // Last resort: walk up from exe
@@ -88,16 +88,16 @@ impl NodeProcessBackend {
                     .ok_or_else(|| anyhow!("Cannot get exe parent dir"))?;
                 loop {
                     let try_path = candidate.join("server");
-                    if try_path.join("server-ipc.cjs").exists() {
+                    if try_path.join("index.cjs").exists() {
                         break try_path;
                     }
                     candidate = candidate.parent()
-                        .ok_or_else(|| anyhow!("server-ipc.js not found in any ancestor of {}", exe.display()))?;
+                        .ok_or_else(|| anyhow!("index.cjs not found in any ancestor of {}", exe.display()))?;
                 }
             }
         };
 
-        let server_ipc = server_dir.join("server-ipc.cjs");
+        let server_ipc = server_dir.join("index.cjs");
         let script_path = server_ipc
             .to_str()
             .ok_or_else(|| anyhow!("Failed to convert script path to string"))?
@@ -147,7 +147,7 @@ impl NodeProcessBackend {
         let pending = Arc::new(Mutex::new(HashMap::new()));
 
         // Exit signal: fires when the reader loop sees Terminated
-        let (exit_tx, exit_rx) = oneshot::channel::<()>();
+        let (exit_tx, exit_rx) = oneshot::channel::<Option<i32>>();
         let exit_tx_shared = Arc::new(Mutex::new(Some(exit_tx)));
 
         Self::start_reader_loop(rx, pending.clone(), exit_tx_shared, app.clone());
@@ -164,7 +164,7 @@ impl NodeProcessBackend {
         match msg_type {
             "projects" | "profiles" => Duration::from_secs(10),
             "ingest" | "history" | "upload" => Duration::from_secs(15),
-            "chat" | "image_gen" | "deep_search" | "qmd_index" => Duration::from_secs(180),
+            "chat" | "image_gen" | "deep_search" | "qmd_index" | "multi_model_send" => Duration::from_secs(180),
             _ => Duration::from_secs(30),
         }
     }
@@ -172,7 +172,7 @@ impl NodeProcessBackend {
     fn start_reader_loop(
         mut rx: tokio::sync::mpsc::Receiver<CommandEvent>,
         pending: Arc<Mutex<HashMap<String, oneshot::Sender<IpcResponse>>>>,
-        exit_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+        exit_tx: Arc<Mutex<Option<oneshot::Sender<Option<i32>>>>>,
         app: AppHandle,
     ) {
         tokio::spawn(async move {
@@ -243,7 +243,7 @@ impl NodeProcessBackend {
                         }
                         // Notify the watchdog
                         if let Some(tx) = exit_tx.lock().await.take() {
-                            let _ = tx.send(());
+                            let _ = tx.send(payload.code);
                         }
                         break;
                     }
@@ -255,7 +255,7 @@ impl NodeProcessBackend {
 
     /// Take the exit receiver so the watchdog can await process death.
     /// Returns `None` if already taken.
-    pub fn take_exit_rx(&mut self) -> Option<oneshot::Receiver<()>> {
+    pub fn take_exit_rx(&mut self) -> Option<oneshot::Receiver<Option<i32>>> {
         self.exit_rx.take()
     }
 
@@ -279,8 +279,11 @@ impl NodeProcessBackend {
         // Write to stdin. On failure remove the pending sender so it doesn't
         // leak in the map waiting for a response that will never arrive.
         if let Err(e) = self.child.write(line.as_bytes()) {
+            eprintln!("[NodeProcessBackend] ❌ Failed to write to sidecar stdin for {}: {}", msg_type, e);
             self.pending.lock().await.remove(&id);
             return Err(anyhow!("Failed to write to sidecar stdin: {}", e));
+        } else {
+            // eprintln!("[NodeProcessBackend] ✅ Wrote {} bytes to stdin for {}", line.len(), msg_type);
         }
 
         let resp_timeout = Self::timeout_for(msg_type);

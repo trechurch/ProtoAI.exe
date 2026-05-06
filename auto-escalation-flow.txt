@@ -1,0 +1,284 @@
+ Done. Here's how auto-escalation now works:
+
+  Flow when you send a message:
+
+  ui/app.js → sendChatMessage("talk about Voice Chat")
+    ↓
+  SendMessageWorkflow.run()
+    ↓
+  FileContextWorkflow.run() — resolves context server-side:
+
+    1. Load permissions from .protoai-permissions.json
+    2. Classify all project files by tier (eager/cached/lazy)
+    3. BUILD DEPENDENCY GRAPH:
+       - Read each eager file's content
+       - Parse imports: require(), import from, @import, src/href
+       - Resolve imports to actual files in the project
+       - Recursively: if App.jsx → utils.js → helpers.js
+       - AUTO-ESCALATE: dependencies are raised to "eager" for this session
+    4. Read files in order: eager → cached → lazy (lazy only if user mentions it)
+    5. Return context string (capped at 64KB) + log of escalated files
+
+    Example escalation result:
+      app.js: none → eager (auto-escalated via import chain)
+      utils.js: lazy → eager (auto-escalated via import chain)
+    ↓
+  Builds full prompt with context → writes to temp file → calls CLI
+
+  Key design points:
+  - Escalation is per-session (memory only) — it doesn't modify the permissions file on disk
+  - Uses resolveHigherTier() — if a file is already "eager", escalating again keeps it "eager". If "lazy",
+  it becomes "eager". Cascades recursively.
+  - Only scans code files (JS/TS/HTML/CSS/Python/etc.) — ignores build artifacts, .o files, etc.
+  - Handles relative imports (./utils, ../components/App), bare imports, require calls, HTML src/hrefs
+
+✻ Churned for 2m 10s
+
+> and is there a way to manually raise the tier of a chosen file's "eagerness" that does save to the
+permissions file?
+
+● Yes — set-tier already exists and already persists to disk. Here's the chain:
+
+  CLI (permanent):
+  node permissions.js set-tier --project myapp --file app.js --tier eager
+  node permissions.js set-tier --project myapp --file utils.js --tier cached
+  node permissions.js set-tier --project myapp --file bundle.min.js --tier lazy
+
+  These write directly to .protoai-permissions.json and survive restarts.
+
+  Now let me update the UI dialog so you can actually see and change tiers visually:
+
+  Read 1 file (ctrl+o to expand)
+
+● The set-tier action already exists in the workflow and CLI — it saves to .protoai-permissions.json. But
+  the UI dialog doesn't show tiers or let you change them. Let me fix that:
+
+● Update(ui\app.js)
+  ⎿  Error editing file
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Update(ui\app.js)
+  ⎿  Added 8 lines, removed 1 line
+      1633      } else {
+      1634        permissions.grantedPaths.forEach((g, i) => {
+      1635          const icon = g.type === "directory" ? "📁" : g.type === "file" ? "📄" : "🔗";
+      1636 +        const tierColors = { eager: "#4caf50", cached: "#2196f3", lazy: "#f59e0b" };
+      1637 +        const tierColor = tierColors[g.tier || "eager"] || tierColors.eager;
+      1638          const div = document.createElement("div");
+      1637 -        div.style.cssText = "padding:6px 8px;display:flex;align-items:center;gap:8px;bord
+           -er-radius:6px;";
+      1639 +        div.style.cssText = "padding:6px 8px;display:flex;align-items:center;gap:6px;bord
+           +er-radius:6px;";
+      1640          div.innerHTML = `
+      1641            <span style="cursor:default;">${icon}</span>
+      1642            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+            >${g.path}</span>
+      1643 +          <select data-tier-idx="${i}" style="font-size:10px;background:var(--bg-elevated
+           +-2);border:1px solid ${tierColor};color:${tierColor};border-radius:4px;padding:1px 4px;cu
+           +rsor:pointer;">
+      1644 +            <option value="eager" ${(g.tier||"eager")==="eager"?"selected":""}>eager</opt
+           +ion>
+      1645 +            <option value="cached" ${(g.tier||"eager")==="cached"?"selected":""}>cached</
+           +option>
+      1646 +            <option value="lazy" ${(g.tier||"eager")==="lazy"?"selected":""}>lazy</option
+           +>
+      1647 +          </select>
+      1648            <span style="font-size:10px;color:var(--text-dim);white-space:nowrap;">${new Da
+            te(g.grantedAt).toLocaleDateString()}</span>
+      1649            <button data-revoke="${i}" style="background:none;border:none;color:var(--color
+            -error);cursor:pointer;font-size:12px;flex-shrink:0;" title="Revoke">✕</button>
+      1650          `;
+
+● Now add the tier-change handler after the revoke delegation:
+
+● Reading 1 file… (ctrl+o to expand)
+  ⎿  ui\app.js
+
+● Update(ui\app.js)
+  ⎿  Added 12 lines
+      1667      }
+      1668    });
+      1669
+      1670 +  // Tier select change — saves to permissions file via workflow
+      1671 +  dialog.querySelector("#permList").addEventListener("change", e => {
+      1672 +    const sel = e.target.closest("[data-tier-idx]");
+      1673 +    if (!sel) return;
+      1674 +    const idx = parseInt(sel.dataset.tierIdx);
+      1675 +    const target = permissions.grantedPaths[idx];
+      1676 +    triggerPermissionAction("set-tier", target.type, target.path, (result) => {
+      1677 +      permissions.grantedPaths[idx].tier = result.tier;
+      1678 +      renderPerms();
+      1679 +    }, sel.value);
+      1680 +  });
+      1681 +
+      1682    // Grant button
+      1683    dialog.querySelector("#permGrantBtn").onclick = async () => {
+      1684      const typeSelect = dialog.querySelector("#permTypeSelect");
+
+● Now update triggerPermissionAction to handle the set-tier case with the tier value:
+
+  Reading 1 file… (ctrl+o to expand)
+  ⎿  ui\app.js
+
+● Update(ui\app.js)
+  ⎿  Added 2 lines, removed 1 line
+      1716    };
+      1717  }
+      1718
+      1719 -async function triggerPermissionAction(action, type, target, onSuccess) {
+      1719 +async function triggerPermissionAction(action, type, target, onSuccess, tierValue) {
+      1720    try {
+      1721      let payload = { action, project: currentProject };
+      1722      if (type === "file") payload.file = target;
+      1723      else if (type === "directory") payload.directory = target;
+      1724      else if (type === "pattern") payload.pattern = target;
+      1725      else if (type === "policy") payload["default"] = target;
+      1726 +    if (action === "set-tier" && tierValue) payload.tier = tierValue;
+      1727
+      1728      const res = await runWorkflow("FilePermissionsWorkflow", payload);
+      1729
+
+● Also update the grant handler to include tier:
+
+  Reading 1 file… (ctrl+o to expand)
+  ⎿  ui\app.js
+
+● Update(ui\app.js)
+  ⎿  Added 1 line
+      1691        permissions.grantedPaths.push({
+      1692          type: result.granted.type,
+      1693          path: result.granted.path,
+      1694 +        tier: result.granted.tier || "eager",
+      1695          grantedAt: result.granted.grantedAt
+      1696        });
+      1697        pathInput.value = "";
+
+● And add a tier selector to the grant form:
+
+● Reading 1 file… (ctrl+o to expand)
+  ⎿  ui\app.js
+
+● Update(ui\app.js)
+  ⎿  Added 5 lines
+      1602              <option value="directory">Directory</option>
+      1603              <option value="pattern">Pattern</option>
+      1604            </select>
+      1605 +          <select id="permTierSelect" style="flex:0 0 70px;background:var(--bg-elevated-2
+           +);border:1px solid var(--border-subtle);color:var(--text);border-radius:6px;padding:4px 6
+           +px;font-size:11px;">
+      1606 +            <option value="eager">eager</option>
+      1607 +            <option value="cached">cached</option>
+      1608 +            <option value="lazy">lazy</option>
+      1609 +          </select>
+      1610            <input id="permPathInput" type="text" placeholder="e.g. src/components/App.jsx"
+             style="flex:1;background:var(--bg-elevated-2);border:1px solid var(--border-subtle);colo
+            r:var(--text);border-radius:6px;padding:5px 8px;font-size:12px;" />
+      1611            <button class="primary" id="permGrantBtn" style="font-size:12px;padding:5px 12p
+            x;">Grant</button>
+      1612          </div>
+
+● Now update the grant handler to pass the tier to the workflow:
+
+● Update(ui\app.js)
+  ⎿  Added 1 line
+      1687    // Grant button
+      1688    dialog.querySelector("#permGrantBtn").onclick = async () => {
+      1689      const typeSelect = dialog.querySelector("#permTypeSelect");
+      1690 +    const tierSelect = dialog.querySelector("#permTierSelect");
+      1691      const pathInput = dialog.querySelector("#permPathInput");
+      1692      const targetPath = pathInput.value.trim();
+      1693      if (!targetPath) return;
+
+● Now I need to pass the tier from the select to the workflow in the grant handler:
+
+  Reading 1 file… (ctrl+o to expand)
+  ⎿  ui\app.js
+
+● Update(ui\app.js)
+  ⎿  Added 1 line
+      1693      if (!targetPath) return;
+      1694
+      1695      const type = typeSelect.value;
+      1696 +    const tier = tierSelect ? tierSelect.value : "eager";
+      1697      await triggerPermissionAction("grant", type, targetPath, (result) => {
+      1698        permissions.grantedPaths.push({
+      1699          type: result.granted.type,
+
+● Now pass the tier to the workflow:
+
+● Update(ui\app.js)
+  ⎿  Error editing file
+
+  Read 1 file (ctrl+o to expand)
+
+● I need to pass the tier value through the grant call. Let me check triggerPermissionAction:
+
+● Update(ui\app.js)
+  ⎿  Error editing file
+
+● Looks like the response was cut off. Did you hit a key by accident?
+
+✻ Sautéed for 11m 26s
+
+> accident, continue
+
+● I need to pass the tier value through the grant call. Let me check the current state of
+  triggerPermissionAction:
+
+  Read 1 file (ctrl+o to expand)
+
+● Now I need to wire the tier value through triggerPermissionAction. I added it as a 5th parameter for
+  set-tier, but grant needs it too. Let me update the grant handler and triggerPermissionAction:
+
+  Read 1 file (ctrl+o to expand)
+
+● Now I need to pass tier for grant calls too. The handler already reads tier as a local var at line 1696.
+  I'll pass it through:
+
+● Update(ui\app.js)
+  ⎿  Added 1 line, removed 1 line
+      1731      else if (type === "directory") payload.directory = target;
+      1732      else if (type === "pattern") payload.pattern = target;
+      1733      else if (type === "policy") payload["default"] = target;
+      1734 -    if (action === "set-tier" && tierValue) payload.tier = tierValue;
+      1734 +    if (tierValue) payload.tier = tierValue;
+      1735
+      1736      const res = await runWorkflow("FilePermissionsWorkflow", payload);
+      1737
+
+● Now pass tier for grant:
+
+● Update(ui\app.js)
+  ⎿  Error editing file
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(ui\app.js)
+  ⎿  Error editing file
+
+● I see — the tool requires actual text change. Let me add the tier parameter to that specific call:
+
+● Update(ui\app.js)
+  ⎿  Error editing file
+
+● Let me read more context around the line to get a unique string:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(ui\app.js)
+  ⎿  Error editing file
+
+● Update(ui\app.js)
+  ⎿  Added 1 line, removed 1 line
+      1694
+      1695      const type = typeSelect.value;
+      1696      const tier = tierSelect ? tierSelect.value : "eager";
+      1697 -    await triggerPermissionAction("grant", type, targetPath, (result) => {
+      1697 +    const result = await triggerPermissionActionDirect("grant", type, targetPath, tier, (
+           +result) => {
+      1698        permissions.grantedPaths.push({
+      1699          type: result.granted.type,
+      1700          path: result.granted.path,
+
+● Wait, that's wrong — let me fix it properly:

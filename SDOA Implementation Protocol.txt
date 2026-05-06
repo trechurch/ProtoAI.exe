@@ -1,0 +1,17 @@
+SDOA Implementation Protocol
+I. Interaction & Feedback Gates
+Trigger-Based Response: For file-only uploads, initiate a State: Pending mode. Do not execute analysis or provide output until the ~ signal is received.
+
+Atomic File Delivery: All code modifications must be delivered as complete source files. Snippets are prohibited to ensure the declarative integrity of the orchestration layer is maintained.
+
+II. Architectural Integrity (SDOA Standards)
+Declarative Compliance: All code must adhere to SDOA standards, ensuring a strict separation between the Orchestration Layer (logic flow) and the Resource Layer (execution).
+
+V3 Action Layer Optimization: Actively refactor logic to utilize the v3 Action Layer. Focus on improving functional modularity and reducing side effects within the orchestration flow.
+
+III. Versioning & Traceability
+Temporal Metadata: Every file must begin with a standardized header containing a Time and Date Stamp (ISO 8601 preferred).
+
+Micro-Incrementation Policy: Adopt an aggressive versioning strategy. Every alteration requires a version increment (e.g., v1.0.04 → v1.0.05) to ensure a granular audit trail.
+
+Manifest Documentation: Every code change must include concise, technical documentation within the file header, detailing the specific modifications and their impact on the system state.

@@ -1,6 +1,7 @@
 // ============================================================
 // ManifestPanel.ui.js — VFS Purpose Manifest Display
 // version: 1.0.0
+// Last modified: 2026-05-04 03:11 UTC
 // depends: tauri-utils.js, EventBus.ui.js
 // ============================================================
 
@@ -28,7 +29,8 @@
         version: "1.0.0",
         capabilities: ["manifest.display", "vfs.status", "vfs.add"],
         dependencies: ["tauri-utils.js", "EventBus.ui.js"],
-        docs: { description: "Displays VFS purpose manifest for a selected file. Shows metadata, purpose fields, VFS status and permissions." },
+        docs: { description: "Displays VFS purpose manifest for a selected file. Shows metadata, purpose fields, VFS status and permissions.",
+            author: "ProtoAI team" },
         actions: {
             commands: {
                 render:     { description: "Render manifest panel into container.", input: { container: "DOMElement" }, output: "void" },
@@ -92,7 +94,7 @@
                 _renderNotInVfs(filePath);
             }
         } catch (err) {
-            _renderError(err.message);
+            _renderError(err?.message || String(err));
         }
     }
 
@@ -113,7 +115,7 @@
                 _renderManifest(res.manifest, res.entry);
             }
         } catch (err) {
-            _renderError(err.message);
+            _renderError(err?.message || String(err));
         }
     }
 
@@ -191,7 +193,7 @@
                     refresh: true,
                 });
                 if (res?.manifest) _renderManifest(res.manifest, res.entry);
-            } catch (err) { _renderError(err.message); }
+            } catch (err) { _renderError(err?.message || String(err)); }
         });
 
         _container.querySelector("#manifestOpenBtn")?.addEventListener("click", () => {
@@ -264,7 +266,7 @@
             } catch (err) {
                 btn.disabled    = false;
                 btn.textContent = "Add to VFS";
-                window.showToast?.(`Failed to add: ${err.message}`);
+                window.showToast?.(`Failed to add: ${err?.message || String(err)}`);
             }
         });
     }
@@ -305,7 +307,7 @@
                 window.EventBus?.emit("manifestpanel:permissionsChanged", { id: entry.id, permissions });
                 showEntry(entry.id); // refresh
             } catch (err) {
-                window.showToast?.(`Failed: ${err.message}`);
+                window.showToast?.(`Failed: ${err?.message || String(err)}`);
             }
         });
 

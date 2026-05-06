@@ -1,3 +1,4 @@
+// Last modified: 2026-05-04 03:11 UTC
 "use strict";
 
 // ============================================================
@@ -57,7 +58,26 @@ function generateId() {
 }
 
 class FsVfsRepository extends BaseRepository {
-    constructor(project) {
+
+    static MANIFEST = {
+        id:           "FsVfsRepository",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [],
+        dependencies: [],
+        docs: {
+            description: "Manages FsVfsRepository operations.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands:  {},
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+        constructor(project) {
         super(paths.vfs(project));
         this.project = project;
         // Ensure manifests subdirectory exists

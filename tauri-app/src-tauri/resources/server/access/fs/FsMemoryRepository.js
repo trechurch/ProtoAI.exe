@@ -1,8 +1,28 @@
+// Last modified: 2026-05-04 03:11 UTC
 const BaseRepository = require("./BaseRepository");
 const paths = require("../env/paths");
 
 class FsMemoryRepository extends BaseRepository {
-  constructor() {
+
+    static MANIFEST = {
+        id:           "FsMemoryRepository",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [],
+        dependencies: [],
+        docs: {
+            description: "Manages FsMemoryRepository operations.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands:  {},
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+      constructor() {
     super(paths.data());
   }
 

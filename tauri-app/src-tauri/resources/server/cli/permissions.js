@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Last modified: 2026-05-04 03:11 UTC
 // ProtoAI File Permissions CLI
 // Usage:
 //   node permissions.js grant --project myapp --file src/components/Header.jsx
@@ -12,6 +13,27 @@
 
 const path = require("path");
 const fs = require("fs-extra");
+
+// SDOA v3.0 MANIFEST
+const MANIFEST = {
+    id:           "permissions",
+    type:         "utility",
+    runtime:      "NodeJS",
+    version:      "1.0.0",
+    capabilities: [],
+    dependencies: [],
+    docs: {
+        description: "permissions utilities and exports.",
+        author: "ProtoAI team",
+    },
+    actions: {
+        commands:  {},
+        triggers:  {},
+        emits:     {},
+        workflows: {},
+    },
+};
+
 
 // Locate project root
 const ROOT_DIR = path.resolve(__dirname, "..");

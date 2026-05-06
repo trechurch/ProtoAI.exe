@@ -1,7 +1,27 @@
+// Last modified: 2026-05-04 03:11 UTC
 const path = require("path");
 
 class PathResolver {
-  constructor() {
+
+    static MANIFEST = {
+        id:           "PathResolver",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [],
+        dependencies: [],
+        docs: {
+            description: "Manages PathResolver operations.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands:  {},
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+      constructor() {
     this.root = process.env.PROTOAI_ROOT || process.cwd();
   }
 
@@ -57,6 +77,10 @@ class PathResolver {
 
   userProfiles(...p) {
     return this.data("user-profiles", ...p);
+  }
+
+  userProfile() {
+    return this.data("user-profile.json");
   }
 
   // ── VFS paths ─────────────────────────────────────────────

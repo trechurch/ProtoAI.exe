@@ -1,0 +1,14 @@
+/* Last modified: 2026-05-04 03:11 UTC */
+/* EmptyState.prim.css — SDOA v4 */
+.sdoa-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-2xl) var(--space-lg);
+  text-align: center;
+}
+.sdoa-empty-state__icon { font-size: 36px; opacity: 0.4; }
+.sdoa-empty-state__title { font-size: var(--text-base); color: var(--text-muted); font-weight: 500; }
+.sdoa-empty-state__hint { font-size: var(--text-sm); color: var(--text-dim); max-width: 280px; line-height: var(--line-height); }

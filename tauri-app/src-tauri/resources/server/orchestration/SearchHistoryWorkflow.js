@@ -1,3 +1,4 @@
+// Last modified: 2026-05-04 03:11 UTC
 "use strict";
 
 // ============================================================
@@ -19,7 +20,26 @@ exports.VERSION    = "1.0.0";
 exports.getVersion = () => exports.VERSION;
 
 class SearchHistoryWorkflow extends WorkflowBase {
-    async run(payload) {
+
+    static MANIFEST = {
+        id:           "SearchHistoryWorkflow",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [],
+        dependencies: [],
+        docs: {
+            description: "Manages SearchHistoryWorkflow operations.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands:  {},
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+        async run(payload) {
         try {
             const { project, query, limit = 50, allProjects = false } = payload || {};
 

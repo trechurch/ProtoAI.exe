@@ -1,3 +1,4 @@
+// Last modified: 2026-05-04 03:11 UTC
 const WorkflowBase = require("./WorkflowBase");
 const WorkflowResult = require("./WorkflowResult");
 const FsProfileRepository = require("../access/fs/FsProfileRepository");
@@ -6,7 +7,26 @@ exports.VERSION = "2.0.0";
 exports.getVersion = () => exports.VERSION;
 
 class ListProfilesWorkflow extends WorkflowBase {
-  async run() {
+
+    static MANIFEST = {
+        id:           "ListProfilesWorkflow",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [],
+        dependencies: [],
+        docs: {
+            description: "Manages ListProfilesWorkflow operations.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands:  {},
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+      async run() {
     try {
       const repo = new FsProfileRepository();
 

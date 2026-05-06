@@ -1,0 +1,85 @@
+/* ============================================================
+/* Last modified: 2026-05-04 03:11 UTC */
+   ModelManager.feature.css
+   ============================================================ */
+
+.mm-root { display:flex;flex-direction:column;height:100%;font-size:13px; }
+
+/* Content area */
+.mm-content { flex:1;overflow:auto;padding:12px; }
+
+/* Archetype grid */
+.mm-archetype-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+    gap:12px;
+}
+.mm-archetype-card {
+    background:var(--bg-elevated-1,#1a1a2e);
+    border:1px solid var(--border-subtle,#333);
+    border-radius:10px;padding:14px;
+    display:flex;flex-direction:column;gap:4px;
+    transition:border-color 0.2s, box-shadow 0.2s;
+}
+.mm-archetype-card:hover {
+    border-color:var(--accent,#6366f1);
+}
+.mm-archetype-card.active {
+    border-color:var(--accent,#6366f1);
+    box-shadow:0 0 0 2px rgba(99,102,241,0.25);
+}
+.mm-card-emoji  { font-size:28px;line-height:1; }
+.mm-card-name   { font-weight:700;font-size:14px;color:var(--text,#eee);margin-top:4px; }
+.mm-card-desc   { font-size:12px;color:var(--text-dim,#888);line-height:1.4; }
+.mm-card-models { display:flex;flex-wrap:wrap;gap:4px;margin-top:4px; }
+.mm-model-chip  {
+    font-size:10px;padding:2px 6px;border-radius:4px;
+    background:var(--bg-elevated-2,#252540);color:var(--text-dim,#888);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;
+}
+.mm-card-active-badge {
+    margin-top:8px;font-size:12px;font-weight:600;
+    color:var(--accent,#6366f1);
+}
+.mm-card-activate-btn {
+    margin-top:8px;width:100%;
+}
+
+/* Inventory table */
+.mm-inventory-header {
+    display:flex;align-items:center;gap:8px;
+    margin-bottom:10px;padding-bottom:8px;
+    border-bottom:1px solid var(--border-subtle,#333);
+}
+.mm-model-row {
+    display:flex;align-items:center;gap:8px;
+    padding:6px 8px;border-radius:6px;
+    border:1px solid transparent;
+    transition:background 0.1s;cursor:default;
+}
+.mm-model-row:hover         { background:var(--bg-elevated-1,#1a1a2e); }
+.mm-model-row.mm-dragging   { opacity:0.5; }
+.mm-model-row.mm-drag-over  { border-color:var(--accent,#6366f1); }
+.mm-drag-handle {
+    color:var(--text-dim,#555);cursor:grab;font-size:14px;
+    padding:0 2px;user-select:none;
+}
+.mm-drag-handle:active { cursor:grabbing; }
+.mm-row-toggle  { flex-shrink:0; }
+.mm-model-name  { flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text,#ccc); }
+.mm-model-name.mm-inactive { color:var(--text-dim,#555);text-decoration:line-through; }
+.mm-api-badge   {
+    font-size:10px;padding:2px 6px;border-radius:4px;
+    background:var(--bg-elevated-2,#252540);color:var(--text-dim,#777);
+    flex-shrink:0;
+}
+.mm-edit-btn { flex-shrink:0;opacity:0.5; }
+.mm-edit-btn:hover { opacity:1; }
+
+/* Add model form */
+.mm-add-form {
+    display:flex;gap:8px;align-items:center;
+    padding:8px;margin-top:8px;
+    background:var(--bg-elevated-1,#1a1a2e);
+    border-radius:6px;border:1px solid var(--border-subtle,#333);
+}

@@ -1,0 +1,13 @@
+/* Last modified: 2026-05-04 03:11 UTC */
+/* Toggle.prim.css — SDOA v4 */
+.sdoa-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+.sdoa-toggle__label {
+  font-size: var(--text-sm);
+  color: var(--text);
+  font-weight: 500;
+}

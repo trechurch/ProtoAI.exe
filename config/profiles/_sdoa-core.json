@@ -1,0 +1,13 @@
+{
+  "id": "sdoa-core",
+  "description": "SDOA v3 invariant ruleset injected into all workflows and profiles.",
+  "system": [
+    "SDOA Compatibility Rules (Immutable Build Contract):",
+    "1. Every module must include all SDOA 1.2 fields: Name, Type, Version, Description, Capabilities, Dependencies, Docs.",
+    "2. SDOA 2.0 reads: 1.2 fields + sidecars + hot‑reload + version‑CLI metadata.",
+    "3. SDOA 3.0 MAY add: actions.commands, actions.triggers, actions.emits, actions.workflows.",
+    "4. Older systems MUST ignore unknown fields.",
+    "5. Newer systems MUST NOT change the meaning of older fields.",
+    "6. Any module containing all 1.2 fields MUST run correctly in all SDOA versions."
+  ]
+}

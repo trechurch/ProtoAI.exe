@@ -1,7 +1,27 @@
+// Last modified: 2026-05-04 03:11 UTC
 const fs = require("fs-extra");
 
 class BaseRepository {
-  constructor(basePath) {
+
+    static MANIFEST = {
+        id:           "BaseRepository",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [],
+        dependencies: [],
+        docs: {
+            description: "Manages BaseRepository operations.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands:  {},
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+      constructor(basePath) {
     this.basePath = basePath;
     fs.mkdirpSync(this.basePath);
     // Per-file write queues to prevent concurrent write corruption on Windows

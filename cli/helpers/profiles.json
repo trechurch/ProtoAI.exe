@@ -1,103 +1,149 @@
 {
-    "default": {
-        "model": "nvidia/nemotron-3-super-120b-a12b:free",
-        "fallback": [
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "openai/gpt-oss-120b:free"
-        ],
-        "system": "You are a senior software engineer. Produce clean, modular, well-structured code with clear reasoning",
-        "temperature": 0.7,
-        "max_tokens": 2048,
-        "verbosity": "balanced",
-        "format": "plain",
-        "memory_mode": "global+project",
-        "file_ingestion": true,
-        "cot": "suppress"
-    },
-
-    "coding": {
-        "model": "nvidia/nemotron-3-super-120b-a12b:free",
-        "fallback": [
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "openai/gpt-oss-120b:free"
-        ],
-        "system": "You are a senior software engineer. Produve clean, modular, well-structured code with clear reasoning.",
-        "temperature": 0.2,
-        "max_tokens": 2048,
-        "verbosity": "concise",
-        "format": "code",
-        "memory_mode": "project",
-        "file_ingestion": true,
-        "cot": "suppress"
-    },
-
-    "analysis": {
-        "model": "nvidia/nemotron-3-super-120b-a12b:free",
-        "fallback": [
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "openai/gpt-oss-120b:free"
-        ],
-        "system": "You are an analytical assistant. Break down problems step-by-step with clarity and precision.",
-        "temperature": 0.1,
-        "max_tokens": 2048,
-        "verbosity": "detailed",
-        "format": "plain",
-        "memory_mode": "global+project",
-        "file_ingestion": false,
-        "cot": "suppress"
-    },
-
-    "creative": {
-        "model": "nvidia/nemotron-3-super-120b-a12b:free",
-        "fallback": [
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "openai/gpt-oss-120b:free"
-        ],
-        "system": "You are a creative assistant. Generate imaginative, expressive, and original content.",
-        "temperature": 0.9,
-        "max_tokens": 2048,
-        "verbosity": "expanded",
-        "format": "plain",
-        "memory_mode": "none",
-        "file_ingestion": false,
-        "cot": "suppress"
-    },
-
-    "refactor": {
-        "model": "nvidia/nemotron-3-super-120b-a12b:free",
-        "fallback": [
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "openai/gpt-oss-120b:free"
-        ],
-        "system": "You are a code refactoring engine. Improve structure, readability, and maintainability without changing behavior.",
-        "temperature": 0.15,
-        "max_tokens": 2048,
-        "verbosity": "concise",
-        "format": "code",
-        "memory_mode": "project",
-        "file_ingestion": true,
-        "cot": "suppress"
-    },
-
-    "explain": {
-        "model": "nvidia/nemotron-3-super-120b-a12b:free",
-        "fallback": [
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "openai/gpt-oss-120b:free"
-        ],
-        "system": "You are an explainer. Break down complex topics into simple, intuitive explanations. Use examples and analogies when helpful.",
-        "temperature": 0.4,
-        "max_tokens": 2048,
-        "verbosity": "balanced",
-        "format": "plain",
-        "memory_mode": "global",
-        "file_ingestion": false,
-        "cot": "suppress"
-    }
+  "default": {
+    "system": "You are ProtoAI, a senior software engineering assistant. You have access to a persistent memory system and a Virtual File System (VFS). You are designed to maintain context across sessions. To store a fact in permanent memory, include 'MEMORY_RECORD: <fact>' in your response. Your memory is shared across sessions for the current project.",
+    "temperature": 0.7,
+    "max_tokens": 2048,
+    "verbosity": "balanced",
+    "format": "plain",
+    "memory_mode": "global+project",
+    "file_ingestion": true,
+    "cot": "suppress",
+    "model": "meta-llama/llama-3.3-70b-instruct:free",
+    "fallback": [
+      "qwen/qwen3-next-80b-a3b-instruct:free",
+      "qwen/qwen3-coder:free",
+      "meta-llama/llama-3.2-3b-instruct:free",
+      "nousresearch/hermes-3-llama-3.1-405b:free",
+      "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+      "openrouter/owl-alpha",
+      "google/lyria-3-pro-preview",
+      "google/lyria-3-clip-preview"
+    ]
+  },
+  "coding": {
+    "system": "You are ProtoAI, a senior software engineer. Produce clean, modular, well-structured code with clear reasoning. You have access to a persistent memory system. To store a fact in permanent memory, include 'MEMORY_RECORD: <fact>' in your response.",
+    "temperature": 0.2,
+    "max_tokens": 2048,
+    "verbosity": "concise",
+    "format": "code",
+    "memory_mode": "project",
+    "file_ingestion": true,
+    "cot": "suppress",
+    "model": "qwen/qwen3-coder:free",
+    "fallback": [
+      "qwen/qwen3-next-80b-a3b-instruct:free",
+      "meta-llama/llama-3.2-3b-instruct:free",
+      "nousresearch/hermes-3-llama-3.1-405b:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+      "openrouter/owl-alpha",
+      "google/lyria-3-pro-preview",
+      "google/lyria-3-clip-preview"
+    ]
+  },
+  "analysis": {
+    "system": "You are ProtoAI, an analytical assistant. Break down problems step-by-step with clarity and precision. You have access to a persistent memory system. To store a fact in permanent memory, include 'MEMORY_RECORD: <fact>' in your response.",
+    "temperature": 0.1,
+    "max_tokens": 2048,
+    "verbosity": "detailed",
+    "format": "plain",
+    "memory_mode": "global+project",
+    "file_ingestion": false,
+    "cot": "suppress",
+    "model": "meta-llama/llama-3.3-70b-instruct:free",
+    "fallback": [
+      "qwen/qwen3-next-80b-a3b-instruct:free",
+      "qwen/qwen3-coder:free",
+      "meta-llama/llama-3.2-3b-instruct:free",
+      "nousresearch/hermes-3-llama-3.1-405b:free",
+      "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+      "openrouter/owl-alpha",
+      "google/lyria-3-pro-preview",
+      "google/lyria-3-clip-preview"
+    ]
+  },
+  "creative": {
+    "system": "You are a creative assistant. Generate imaginative, expressive, and original content.",
+    "temperature": 0.9,
+    "max_tokens": 2048,
+    "verbosity": "expanded",
+    "format": "plain",
+    "memory_mode": "none",
+    "file_ingestion": false,
+    "cot": "suppress",
+    "model": "meta-llama/llama-3.3-70b-instruct:free",
+    "fallback": [
+      "qwen/qwen3-next-80b-a3b-instruct:free",
+      "qwen/qwen3-coder:free",
+      "meta-llama/llama-3.2-3b-instruct:free",
+      "nousresearch/hermes-3-llama-3.1-405b:free",
+      "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+      "openrouter/owl-alpha",
+      "google/lyria-3-pro-preview",
+      "google/lyria-3-clip-preview"
+    ]
+  },
+  "refactor": {
+    "system": "You are a code refactoring engine. Improve structure, readability, and maintainability without changing behavior.",
+    "temperature": 0.15,
+    "max_tokens": 2048,
+    "verbosity": "concise",
+    "format": "code",
+    "memory_mode": "project",
+    "file_ingestion": true,
+    "cot": "suppress",
+    "model": "meta-llama/llama-3.3-70b-instruct:free",
+    "fallback": [
+      "qwen/qwen3-next-80b-a3b-instruct:free",
+      "qwen/qwen3-coder:free",
+      "meta-llama/llama-3.2-3b-instruct:free",
+      "nousresearch/hermes-3-llama-3.1-405b:free",
+      "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+      "openrouter/owl-alpha",
+      "google/lyria-3-pro-preview",
+      "google/lyria-3-clip-preview"
+    ]
+  },
+  "explain": {
+    "system": "You are ProtoAI, a clear technical explainer. Make complex topics accessible. You have access to a persistent memory system. To store a fact in permanent memory, include 'MEMORY_RECORD: <fact>' in your response.",
+    "temperature": 0.4,
+    "max_tokens": 2048,
+    "verbosity": "detailed",
+    "format": "plain",
+    "memory_mode": "global+project",
+    "file_ingestion": false,
+    "cot": "suppress",
+    "model": "meta-llama/llama-3.3-70b-instruct:free",
+    "fallback": [
+      "qwen/qwen3-next-80b-a3b-instruct:free",
+      "qwen/qwen3-coder:free",
+      "meta-llama/llama-3.2-3b-instruct:free",
+      "nousresearch/hermes-3-llama-3.1-405b:free",
+      "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+      "openrouter/owl-alpha",
+      "google/lyria-3-pro-preview",
+      "google/lyria-3-clip-preview"
+    ]
+  },
+  "research": {
+    "system": "You are ProtoAI, a research assistant. Synthesize information comprehensively and cite sources where possible. You have access to a persistent memory system. To store a fact in permanent memory, include 'MEMORY_RECORD: <fact>' in your response.",
+    "temperature": 0.3,
+    "max_tokens": 2048,
+    "verbosity": "detailed",
+    "format": "plain",
+    "memory_mode": "global+project",
+    "file_ingestion": false,
+    "cot": "suppress",
+    "model": "liquid/lfm-2.5-1.2b-thinking:free",
+    "fallback": [
+      "qwen/qwen3-next-80b-a3b-instruct:free",
+      "qwen/qwen3-coder:free",
+      "meta-llama/llama-3.2-3b-instruct:free",
+      "nousresearch/hermes-3-llama-3.1-405b:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+      "openrouter/owl-alpha",
+      "google/lyria-3-pro-preview"
+    ]
+  }
 }

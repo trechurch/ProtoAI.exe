@@ -1,0 +1,9 @@
+{
+  "fallbackList": [
+    "openai/gpt-oss-120b:free",
+    "gemini/gemini-1.5-pro:free",
+    "deepseek/deepseek-chat:free",
+    "claude/claude-3-opus:free",
+    "qwen-local-7b"
+  ]
+}

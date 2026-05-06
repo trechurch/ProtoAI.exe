@@ -1,0 +1,41 @@
+/* Last modified: 2026-05-04 03:11 UTC */
+/* Badge.prim.css — SDOA v4 */
+
+.sdoa-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: var(--radius-pill);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.sdoa-badge--sm { font-size: var(--text-xs); padding: 2px 8px; }
+.sdoa-badge--md { font-size: var(--text-sm); padding: 3px 10px; }
+
+/* Variants */
+.sdoa-badge--default { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(4px); }
+.sdoa-badge--success { background: rgba(76, 175, 80, 0.1); color: var(--color-success); border: 1px solid rgba(76, 175, 80, 0.2); }
+.sdoa-badge--warning { background: rgba(245, 158, 11, 0.1); color: var(--color-warning); border: 1px solid rgba(245, 158, 11, 0.2); }
+.sdoa-badge--error   { background: rgba(249, 115, 115, 0.1); color: var(--color-error); border: 1px solid rgba(249, 115, 115, 0.2); }
+.sdoa-badge--info    { background: rgba(33, 150, 243, 0.1); color: var(--color-info); border: 1px solid rgba(33, 150, 243, 0.2); }
+.sdoa-badge--accent  { background: rgba(79, 140, 255, 0.1); color: var(--accent); border: 1px solid rgba(79, 140, 255, 0.2); }
+
+/* Dot mode */
+.sdoa-badge--dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+}
+.sdoa-badge--dot.sdoa-badge--success { background: var(--color-success); }
+.sdoa-badge--dot.sdoa-badge--warning { background: var(--color-warning); }
+.sdoa-badge--dot.sdoa-badge--error   { background: var(--color-error); }
+.sdoa-badge--dot.sdoa-badge--info    { background: var(--color-info); }
+.sdoa-badge--dot.sdoa-badge--accent  { background: var(--accent); }
+.sdoa-badge--dot.sdoa-badge--default { background: var(--text-dim); }
+
+.sdoa-badge__icon { font-size: 1em; line-height: 1; }

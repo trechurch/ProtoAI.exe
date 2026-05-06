@@ -1,4 +1,5 @@
 // src-tauri/src/commands.rs
+// Last modified: 2026-04-27 09:08 UTC
 
 use serde_json::Value;
 use tauri::State;
@@ -59,8 +60,35 @@ pub async fn engine_reconnect(app: tauri::AppHandle, bridge: State<'_, BridgeSta
 
 #[tauri::command]
 pub fn get_project_dir(project: String) -> Result<String, String> {
-    let root = std::env::var("PROTOAI_ROOT").unwrap_or_else(|_| ".".into());
-    let dir = std::path::Path::new(&root).join("data").join("projects").join(&project);
+    // FIX: Always resolve to an absolute path.
+    // PROTOAI_ROOT is the canonical root set by the launcher. If absent, walk up
+    // from the executable looking for the data/projects sentinel directory.
+    let root: std::path::PathBuf = std::env::var("PROTOAI_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| {
+                    let mut dir = exe.parent()?.to_path_buf();
+                    for _ in 0..8 {
+                        if dir.join("data").join("projects").exists() {
+                            return Some(dir);
+                        }
+                        if let Some(parent) = dir.parent() {
+                            dir = parent.to_path_buf();
+                        } else {
+                            break;
+                        }
+                    }
+                    None
+                })
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+        });
+
+    // Canonicalize root so the returned path is always absolute.
+    // Fall back to the un-canonicalized path if root doesn't exist yet.
+    let root = root.canonicalize().unwrap_or(root);
+    let dir  = root.join("data").join("projects").join(&project);
     Ok(dir.to_string_lossy().to_string())
 }
 

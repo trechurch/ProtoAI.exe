@@ -1,0 +1,178 @@
+  1 +function _renderBrowserUrl(url) {
+        2 +    const browserContent = document.getElementById("browserContent");
+        3 +    if (!browserContent) return;
+        4    const { domReady } = window.TauriUtils;
+5 +    // Reset address bar
+        6 +    const addressInput = document.getElementById("browserAddress");
+        7 +    if (addressInput) addressInput.value = url;
+        8 -(function () {
+        9 -    "use strict";
+ const ext = url.split(".").pop()?.toLowerCase();
+       10 +    const isLocalFile = url.startsWith("asset://") || url.startsWith("file://") || !url.includes("://"
+          +);
+       11
+
+ 16 +        if (ext === "html" || ext === "htm") {
+       17 +            browserContent.innerHTML = `<iframe src="asset://localhost/${filePath.replace(/\\/g, '/').
+          +replace(/\/g, '/')}"
+       18                  style="width:100%;height:100%;border:none;" sandbox="allow-scripts allow-same-origin">
+           </iframe>`;
+       19 +        } else if (["jpg","jpeg","png","gif","webp","svg"].includes(ext)) {
+       20 +            browserContent.innerHTML = `<div style="padding:16px;text-align:center;">
+       21 +                <img src="asset://localhost/${filePath.replace(/\\/g, '/').replace(/\/g, '/')}"
+       22 +                     style="max-width:100%;max-height:calc(100vh - 120px);object-fit:contain;">
+       23 +            </div>`;
+       24          } else if (["mp4","webm"].includes(ext)) {
+       25 +            browserContent.innerHTML = `<div style="padding:16px;">
+       26                  <video controls style="max-width:100%;max-height:calc(100vh-160px);">
+27 +                    <source src="asset://localhost/${filePath.replace(/\\/g, '/').replace(/\/g, '/')}"
+          +>
+       28 +                </video>
+       29 +            </div>`;
+ 30          } else if (["mp3","wav","ogg","flac"].includes(ext)) {
+ 31 +            browserContent.innerHTML = `<div style="padding:16px;">
+       32                  <audio controls style="width:100%;">
+ 33 +                    <source src="asset://localhost/${filePath.replace(/\\/g, '/').replace(/\/g, '/')}"
+          +>
+       34                  </audio>
+       35                  <div style="margin-top:8px;color:var(--text-muted);font-size:12px;">${filePath.split(/
+           [\\/]/).pop()}</div>
+       36              </div>`;
+       37          } else {
+ 38 +            // Try to read and display file content
+       39 +            window.backendConnector?.runWorkflow("fs_read_file", { path: localPath })
+       40 +                .then(content => {
+       41 +                    if (typeof content === "string") {
+       42 +                        const lines = content.split("
+       43 +").slice(0, 500);
+       44 +                        browserContent.innerHTML = `<pre style="
+       45 +                            padding:12px;font-family:var(--font-mono);font-size:12px;
+       46 +                            color:var(--text);margin:0;background:var(--bg-deep);
+       47 +                            height:100%;overflow:auto;">${_escapeHtml(lines.join("
+       48 +"))}</pre>`;
+       49 +                    }
+       50 +                })
+       51 +                .catch(() => {
+       52 +                    browserContent.innerHTML = `<div style="padding:20px;color:var(--text-muted);font-
+          +size:12px;text-align:center;">
+       53 +                        Cannot preview this file type in browser — ${filePath.split(/[\\/]/).pop()}<br
+          +>
+       54 +                        <span style="font-size:11px;color:var(--text-dim);">(${ext} file)</span>
+       55 +                    </div>`;
+       56                  });
+ 57          }
+       58 +    } else {
+       59 +        // Web URL
+       60 +        browserContent.innerHTML = `<iframe src="${url}"
+       61 +            style="width:100%;height:100%;border:none;" sandbox="allow-scripts allow-same-origin"></if
+          +rame>`;
+       62      }
+       63 +}
+       64
+  65 +function _escapeHtml(text) {
+       66 +    const div = document.createElement("div");
+       67 +    div.textContent = text;
+       68 +    return div.innerHTML;
+       69  70 +}
+       71
+72   No newline at end of file
+       73 +function _openInChat(filePath) {
+       74   No newline at end of file
+-------------------------------------------------------------------------------------------------------------------------------
+
+function _renderBrowserUrl(url) {
+    const browserContent = document.getElementById("browserContent");
+    if (!browserContent) return;
+
+    // Reset address bar
+    const addressInput = document.getElementById("browserAddress");
+    if (addressInput) addressInput.value = url;
+
+    const ext = url.split(".").pop()?.toLowerCase();
+    const isLocalFile = url.startsWith("asset://") || url.startsWith("file://") || !url.includes("://");
+
+    if (isLocalFile) {
+        const filePath = url.replace(/^asset:\/\/localhost\//, "").replace(/^file:\/\//, "");
+        const localPath = filePath.replace(/\/g, "\\");
+
+        if (ext === "html" || ext === "htm") {
+            browserContent.innerHTML = `<iframe src="asset://localhost/${filePath.replace(/\\/g, '/').replace(/\/g, '/')}"
+                style="width:100%;height:100%;border:none;" sandbox="allow-scripts allow-same-origin"></iframe>`;
+        } else if (["jpg","jpeg","png","gif","webp","svg"].includes(ext)) {
+            browserContent.innerHTML = `<div style="padding:16px;text-align:center;">
+                <img src="asset://localhost/${filePath.replace(/\\/g, '/').replace(/\/g, '/')}"
+                     style="max-width:100%;max-height:calc(100vh - 120px);object-fit:contain;">
+            </div>`;
+        } else if (["mp4","webm"].includes(ext)) {
+            browserContent.innerHTML = `<div style="padding:16px;">
+                <video controls style="max-width:100%;max-height:calc(100vh-160px);">
+                    <source src="asset://localhost/${filePath.replace(/\\/g, '/').replace(/\/g, '/')}">
+                </video>
+            </div>`;
+        } else if (["mp3","wav","ogg","flac"].includes(ext)) {
+            browserContent.innerHTML = `<div style="padding:16px;">
+                <audio controls style="width:100%;">
+                    <source src="asset://localhost/${filePath.replace(/\\/g, '/').replace(/\/g, '/')}">
+                </audio>
+                <div style="margin-top:8px;color:var(--text-muted);font-size:12px;">${filePath.split(/[\\/]/).pop()}</div>
+            </div>`;
+        } else {
+            // Try to read and display file content
+            window.backendConnector?.runWorkflow("fs_read_file", { path: localPath })
+                .then(content => {
+                    if (typeof content === "string") {
+                        const lines = content.split("
+").slice(0, 500);
+                        browserContent.innerHTML = `<pre style="
+                            padding:12px;font-family:var(--font-mono);font-size:12px;
+                            color:var(--text);margin:0;background:var(--bg-deep);
+                            height:100%;overflow:auto;">${_escapeHtml(lines.join("
+"))}</pre>`;
+                    }
+                })
+                .catch(() => {
+                    browserContent.innerHTML = `<div style="padding:20px;color:var(--text-muted);font-size:12px;text-align:center;">
+                        Cannot preview this file type in browser — ${filePath.split(/[\\/]/).pop()}<br>
+                        <span style="font-size:11px;color:var(--text-dim);">(${ext} file)</span>
+                    </div>`;
+                });
+        }
+    } else {
+        // Web URL
+        browserContent.innerHTML = `<iframe src="${url}"
+            style="width:100%;height:100%;border:none;" sandbox="allow-scripts allow-same-origin"></iframe>`;
+    }
+}
+
+function _escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+
+}
+
+function _openInChat(filePath) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

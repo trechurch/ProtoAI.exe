@@ -1,0 +1,124 @@
+/* ============================================================
+   SDOA v4 — Design Tokens
+   version: 4.0.0
+   Last modified: 2026-05-04 03:55 UTC
+   ============================================================ */
+
+:root {
+  /* ── Backgrounds ──────────────────────────────── */
+  --bg:              #05060a;
+  --bg-deep:         #020617;
+  --bg-elevated:     #0c0f17;
+  --bg-elevated-2:   #111623;
+  --bg-layer:        rgba(15, 23, 42, 0.9);
+  --bg-surface:      #1a1a2e;
+  --bg-hover:        rgba(79, 140, 255, 0.08);
+  --bg-active:       rgba(79, 140, 255, 0.12);
+
+  /* ── Borders ──────────────────────────────────── */
+  --border-subtle:   #1e2435;
+  --border-mid:      rgba(148, 163, 184, 0.15);
+  --border-active:   rgba(59, 130, 246, 0.6);
+  --border-default:  1px solid var(--border-subtle);
+
+  /* ── Accent ───────────────────────────────────── */
+  --accent:          #4f8cff;
+  --accent-soft:     rgba(79, 140, 255, 0.15);
+  --accent-strong:   #7dd3fc;
+  --accent-dim:      rgba(79, 140, 255, 0.08);
+
+  /* ── Text ─────────────────────────────────────── */
+  --text:            #f8fafc;
+  --text-primary:    #f8fafc;
+  --text-muted:      #cbd5e1;
+  --text-dim:        #94a3b8;
+  --text-inverse:    #020617;
+
+  /* ── Status Colors ────────────────────────────── */
+  --color-success:   #4caf50;
+  --color-info:      #2196f3;
+  --color-warning:   #f59e0b;
+  --color-error:     #f97373;
+
+  /* ── Spacing Scale ────────────────────────────── */
+  --space-2xs:       2px;
+  --space-xs:        4px;
+  --space-sm:        8px;
+  --space-md:        16px;
+  --space-lg:        24px;
+  --space-xl:        32px;
+  --space-2xl:       48px;
+
+  /* ── Typography ───────────────────────────────── */
+  --font-sans:       system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono:       "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
+                     Consolas, "Liberation Mono", "Courier New", monospace;
+
+  --text-xs:         11px;
+  --text-sm:         13px;
+  --text-base:       14px;
+  --text-lg:         16px;
+  --text-xl:         18px;
+  --text-2xl:        22px;
+
+  --line-height:     1.5;
+  --line-height-tight: 1.25;
+
+  /* ── Border Radius ────────────────────────────── */
+  --radius-sm:       4px;
+  --radius:          8px;
+  --radius-md:       8px;
+  --radius-lg:       12px;
+  --radius-xl:       16px;
+  --radius-pill:     999px;
+
+  /* ── Shadows ──────────────────────────────────── */
+  --shadow-sm:       0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-soft:     0 12px 30px rgba(0, 0, 0, 0.45);
+  --shadow-md:       0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg:       0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-glow:     0 0 0 1px rgba(59, 130, 246, 0.6);
+
+  /* ── Transitions ──────────────────────────────── */
+  --ease-default:    cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast:   120ms;
+  --duration-normal: 180ms;
+  --duration-slow:   300ms;
+  --transition:      0.18s ease;
+
+  /* ── Z-Index Scale ────────────────────────────── */
+  --z-dropdown:      100;
+  --z-modal:         200;
+  --z-toast:         300;
+  --z-tooltip:       400;
+
+  /* ── Layout ───────────────────────────────────── */
+  --sidebar-left-width:  320px;
+  --sidebar-right-width: 220px;
+}
+
+/* ── Global Utilities ────────────────────────────── */
+.hidden { display: none !important; }
+.flex-1 { flex: 1; }
+.text-center { text-align: center; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+
+/* ── Global Reset ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+/* ── Custom Scrollbars ─────────────────────────────────────── */
+::-webkit-scrollbar               { width: 5px; height: 5px; }
+::-webkit-scrollbar-track         { background: transparent; }
+::-webkit-scrollbar-thumb         { background: var(--border-subtle); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover   { background: rgba(148, 163, 184, 0.3); }
+::-webkit-scrollbar-corner        { background: transparent; }

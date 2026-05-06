@@ -1,36 +1,28 @@
+// ============================================================
+// SettingsManager.js — SDOA v3.0 Service (NodeJS)
+// version: 1.0.0
+// Last modified: 2026-05-02 10:00 UTC
+// depends: fs, https, paths
+// ============================================================
+
 // SettingsManager — reads/writes settings.json, validates API keys, merges defaults
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
 
-const DEFAULTS = {
-  version: 1,
-  firstRunCompleted: false,
-  apiKeys: { anthropic: "", openai: "", openrouter: "" },
-  models: {
-    enabled: [
-      "anthropic/claude-3.5-sonnet",
-      "anthropic/claude-opus-4.1",
-      "openai/gpt-4o-mini"
-    ],
-    defaults: { default: "anthropic/claude-3.5-sonnet", coding: "anthropic/claude-3.5-sonnet" },
-    failoverList: [],
-  },
-  profiles: {
-    defaultProfile: "default",
-    fallbackProfile: "analysis",
-    // User-defined profiles: { [id]: { archetypeId?, name?, model?, system?, ... } }
-    userProfiles: {},
-  },
-  ingestion: {
-    maxDepth: 4,
-    maxFileSizeMB: 10,
-    supportedExtensions: [".js", ".ts", ".py", ".rs", ".go", ".java", ".md", ".txt", ".json", ".html", ".css"],
-  },
-  backend: { timeoutMs: 30000, retryCount: 3, fallbackBehavior: "http" },
-  spellcheck: { enabled: true },
-  advanced: { debugLogging: false },
-};
+let DEFAULTS = {};
+try {
+  const defaultsPath = path.join(__dirname, "..", "data", "settings.defaults.json");
+  DEFAULTS = JSON.parse(fs.readFileSync(defaultsPath, "utf8"));
+} catch (err) {
+  console.error("[SettingsManager] Warning: failed to load settings.defaults.json", err.message);
+  DEFAULTS = {
+    version: 1, firstRunCompleted: false, apiKeys: {}, models: { enabled: [], defaults: {}, failoverList: [] },
+    profiles: { defaultProfile: "default", fallbackProfile: "analysis", userProfiles: {} },
+    ingestion: { maxDepth: 4, maxFileSizeMB: 10, supportedExtensions: [".js", ".ts", ".py", ".rs", ".md", ".txt", ".json", ".html", ".css"] },
+    backend: { timeoutMs: 30000, retryCount: 3, fallbackBehavior: "http" }, spellcheck: { enabled: true }, advanced: { debugLogging: false }
+  };
+}
 
 function deepMerge(target, source) {
   const out = { ...target };
@@ -51,6 +43,42 @@ function deepMerge(target, source) {
 }
 
 class SettingsManager {
+
+    // ── SDOA v3.0 MANIFEST ───────────────────────────────────
+    static MANIFEST = {
+        id:           "SettingsManager",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [
+            "settings.load",
+            "settings.save",
+            "settings.get",
+            "settings.set",
+            "settings.validateApiKey",
+            "settings.resolveProfile",
+        ],
+        dependencies: ["fs", "https", "paths"],
+        docs: {
+            description: "Reads and writes settings.json, merges defaults, validates API keys against provider endpoints, and resolves active profiles.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands: {
+                load:            { description: "Load settings from disk, merging DEFAULTS.", input: {}, output: "Settings" },
+                save:            { description: "Persist settings object to disk.", input: { settings: "object" }, output: "void" },
+                get:             { description: "Get a single setting key.", input: { key: "string" }, output: "any" },
+                set:             { description: "Set a single setting key and persist.", input: { key: "string", value: "any" }, output: "void" },
+                validateApiKey:  { description: "Test an API key against the provider endpoint.", input: { provider: "string", key: "string" }, output: "{ valid, credits?, error? }" },
+                resolveProfile:  { description: "Resolve the active profile config for a given profile name.", input: { profile: "string?" }, output: "ProfileConfig" },
+            },
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+    // ── end MANIFEST ─────────────────────────────────────────
+
   constructor(filePath) {
     this.filePath = filePath;
     this._settings = null;
@@ -200,95 +228,104 @@ class SettingsManager {
     this.save();
   }
 
-  validateApiKey(provider, key) {
+  // Returns whether each provider has a key saved (checks secret.key for openrouter)
+  getKeyInfo() {
+    if (!this._settings) this.load();
+    const secretKeyPath = path.join(path.dirname(this.filePath), "secret.key");
+    let secretKeyExists = false;
+    try {
+      const content = fs.readFileSync(secretKeyPath, "utf8").trim();
+      secretKeyExists = content.length > 0;
+    } catch (_) {}
+
+    const apiKeys = this._settings.apiKeys || {};
+    const status  = this._settings.apiKeyStatus || {};
+    return {
+      ok: true,
+      providers: {
+        anthropic:  { saved: !!(apiKeys.anthropic),  status: status.anthropic  || null },
+        openai:     { saved: !!(apiKeys.openai),      status: status.openai     || null },
+        openrouter: { saved: !!(apiKeys.openrouter) || secretKeyExists, secretKey: secretKeyExists, status: status.openrouter || null },
+      },
+    };
+  }
+
+  // ── _httpsGet helper ────────────────────────────────────────
+  _httpsGet(options, body) {
     return new Promise((resolve) => {
-      if (!this._settings) this.load();
-      const apiKey = key || this._settings.apiKeys?.[provider] || "";
-      if (!apiKey) return resolve({ ok: false, error: "No API key provided" });
-
-      const configs = {
-        anthropic: {
-          host: "api.anthropic.com",
-          path: "/v1/messages",
-          method: "POST",
-          headers: {
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({ model: "claude-3-haiku-20240307", max_tokens: 1, messages: [{ role: "user", content: "hi" }] }),
-        },
-        openai: {
-          host: "api.openai.com",
-          path: "/v1/models",
-          method: "GET",
-          headers: { Authorization: `Bearer ${apiKey}` },
-        },
-        openrouter: {
-          host: "openrouter.ai",
-          path: "/api/v1/models",
-          method: "GET",
-          headers: { Authorization: `Bearer ${apiKey}` },
-        },
-      };
-
-      const cfg = configs[provider];
-      if (!cfg) return resolve({ ok: false, error: `Unknown provider: ${provider}` });
-
-      // All providers use HTTPS — always use https module
-      const options = { hostname: cfg.host, port: 443, path: cfg.path, method: cfg.method, headers: cfg.headers };
       const req = https.request(options, (res) => {
         let data = "";
         res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          if (res.statusCode === 200) {
-            resolve({ ok: true });
-          } else {
-            let errMsg = `HTTP ${res.statusCode}`;
-            try {
-              const parsed = JSON.parse(data);
-              errMsg = parsed?.error?.message || parsed?.error || errMsg;
-            } catch (_) {}
-            resolve({ ok: false, error: errMsg });
-          }
-        });
+        res.on("end", () => resolve({ statusCode: res.statusCode, body: data }));
       });
-
-      req.setTimeout(8000, () => { req.destroy(); resolve({ ok: false, error: "Request timed out" }); });
-      req.on("error", (e) => resolve({ ok: false, error: e.message }));
-      if (cfg.body) req.write(cfg.body);
+      req.setTimeout(8000, () => { req.destroy(); resolve({ statusCode: 0, body: "" }); });
+      req.on("error", (e) => resolve({ statusCode: 0, body: "", networkError: e.message }));
+      if (body) req.write(body);
       req.end();
     });
   }
-}
 
-// Convert an archetype definition into the profile shape claude-select.cjs expects
-function _archetypeToProfile(archetype) {
-  return {
-    id: archetype.id,
-    isArchetype: true,
-    name: archetype.name,
-    model: (archetype.primaryModels || [])[0] || "nvidia/nemotron-3-super-120b-a12b:free",
-    fallback: (archetype.primaryModels || []).slice(1),
-    system: _buildSystemPrompt(archetype),
-    temperature: 0.7,
-    max_tokens: 2048,
-    verbosity: "balanced",
-    format: "plain",
-    memory_mode: "global+project",
-    file_ingestion: true,
-    cot: "suppress",
-  };
-}
+  validateApiKey(provider, key) {
+    return new Promise(async (resolve) => {
+      if (!this._settings) this.load();
 
-function _buildSystemPrompt(archetype) {
-  const parts = [];
-  if (archetype.name) parts.push(`You are ${archetype.name}.`);
-  if (archetype.description) parts.push(archetype.description);
-  if (archetype.voice) parts.push(`Voice: ${archetype.voice}.`);
-  if (archetype.personality) parts.push(`Personality: ${archetype.personality}.`);
-  if (archetype.strengths?.length) parts.push(`Strengths: ${archetype.strengths.join(", ")}.`);
-  return parts.join(" ");
+      // For openrouter: fall back to secret.key when no key in settings
+      let apiKey = (key || "").trim() || this._settings.apiKeys?.[provider] || "";
+      if (!apiKey && provider === "openrouter") {
+        try {
+          const secretKeyPath = path.join(path.dirname(this.filePath), "secret.key");
+          apiKey = fs.readFileSync(secretKeyPath, "utf8").trim();
+        } catch (_) {}
+      }
+      if (!apiKey) return resolve({ ok: false, error: "No API key provided" });
+
+      const authHeaders = {
+        anthropic:  { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        openai:     { Authorization: `Bearer ${apiKey}` },
+        openrouter: { Authorization: `Bearer ${apiKey}`, "HTTP-Referer": "https://protoai.app", "X-Title": "ProtoAI" },
+      };
+      if (!authHeaders[provider]) return resolve({ ok: false, error: `Unknown provider: ${provider}` });
+
+      // ── Primary validation request ────────────────────────
+      const primaryConfigs = {
+        anthropic: {
+          hostname: "api.anthropic.com", port: 443, path: "/v1/messages", method: "POST",
+          headers: authHeaders.anthropic,
+        },
+        openai: {
+          hostname: "api.openai.com", port: 443, path: "/v1/models", method: "GET",
+          headers: authHeaders.openai,
+        },
+        openrouter: {
+          hostname: "openrouter.ai", port: 443, path: "/api/v1/auth/key", method: "GET",
+          headers: authHeaders.openrouter,
+        },
+      };
+
+      const config = primaryConfigs[provider];
+      if (!config) return resolve({ ok: false, error: "No validation config for provider" });
+
+      let body = null;
+      if (provider === "anthropic") {
+        body = JSON.stringify({
+          model: "claude-3-5-sonnet-20241022",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "ping" }],
+        });
+      }
+
+      const response = await this._httpsGet(config, body);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return resolve({ ok: true });
+      } else if (response.statusCode === 401) {
+        return resolve({ ok: false, error: "Unauthorized — invalid API key" });
+      } else if (response.statusCode === 429) {
+        return resolve({ ok: false, error: "Rate limited — please try again later" });
+      } else {
+        return resolve({ ok: false, error: `HTTP ${response.statusCode}` });
+      }
+    });
+  }
 }
 
 module.exports = SettingsManager;

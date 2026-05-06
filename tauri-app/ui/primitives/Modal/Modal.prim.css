@@ -1,0 +1,99 @@
+/* Last modified: 2026-05-04 03:11 UTC */
+/* Modal.prim.css — SDOA v4 */
+
+.sdoa-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-default);
+}
+
+.sdoa-modal-overlay--visible {
+  opacity: 1;
+}
+
+.sdoa-modal-overlay--exit {
+  opacity: 0;
+}
+
+/* ── Dialog ────────────────────────────────────────────────── */
+.sdoa-modal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  transform: scale(0.96) translateY(8px);
+  transition: transform var(--duration-normal) var(--ease-default);
+  overflow: hidden;
+}
+
+.sdoa-modal-overlay--visible .sdoa-modal {
+  transform: scale(1) translateY(0);
+}
+
+/* Sizes */
+.sdoa-modal--sm  { width: 400px; }
+.sdoa-modal--md  { width: 560px; }
+.sdoa-modal--lg  { width: 780px; }
+.sdoa-modal--xl  { width: 960px; }
+.sdoa-modal--full { width: 95vw; height: 90vh; }
+
+/* ── Header ────────────────────────────────────────────────── */
+.sdoa-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.sdoa-modal__title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.sdoa-modal__close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast);
+}
+.sdoa-modal__close:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+/* ── Body ──────────────────────────────────────────────────── */
+.sdoa-modal__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-lg);
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+.sdoa-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}

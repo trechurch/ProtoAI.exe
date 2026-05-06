@@ -1,0 +1,248 @@
+/* ProjectManager.feature.css — SDOA v4 */
+
+/* New Project Modal */
+.np-overlay {
+  position: fixed; inset: 0;
+  background: rgba(2, 6, 23, 0.88);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 650;
+  backdrop-filter: blur(10px);
+  animation: npFadeIn 0.2s ease;
+}
+.np-overlay.hidden { display: none; }
+
+@keyframes npFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes npSlideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.np-panel {
+  background: linear-gradient(145deg, #12152a 0%, #0e1220 100%);
+  border: 1px solid rgba(79, 140, 255, 0.15);
+  border-radius: 16px;
+  width: 640px; max-width: 95vw; max-height: 90vh;
+  display: flex; flex-direction: column;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(79, 140, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  animation: npSlideUp 0.25s ease;
+}
+
+.np-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 24px 28px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.np-header h2 {
+  margin: 0; font-size: 20px; font-weight: 700;
+  color: #f0f2ff;
+  letter-spacing: -0.01em;
+}
+.np-subtitle {
+  margin: 4px 0 0; font-size: 13px; color: var(--text-muted);
+}
+
+.np-body {
+  flex: 1; overflow-y: auto; padding: 20px 28px 8px;
+}
+
+.np-section {
+  margin-bottom: 22px;
+}
+
+.np-label {
+  display: block;
+  font-size: 13px; font-weight: 600; color: #d1d5f0;
+  margin-bottom: 6px; letter-spacing: 0.01em;
+}
+.np-required { color: #f87171; font-weight: 400; }
+.np-optional { color: #666; font-weight: 400; font-size: 12px; }
+
+.np-desc {
+  font-size: 12px; color: #6b7194; margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.np-hint {
+  font-size: 11px; color: #4a5078; margin-top: 5px;
+}
+.np-hint-inline {
+  color: #4a5078; font-size: 11px; font-weight: 400;
+}
+
+.np-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text);
+  background: rgba(15, 20, 40, 0.7);
+  border: 1px solid rgba(79, 140, 255, 0.12);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font-family: var(--font-mono);
+}
+.np-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.12);
+}
+.np-input::placeholder { color: #3a4060; }
+
+.np-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 13px; line-height: 1.6;
+  color: var(--text);
+  background: rgba(15, 20, 40, 0.7);
+  border: 1px solid rgba(79, 140, 255, 0.12);
+  border-radius: 8px;
+  outline: none;
+  resize: vertical;
+  font-family: var(--font-sans);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.np-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.12);
+}
+.np-textarea::placeholder { color: #3a4060; }
+
+/* Model chip grid */
+.np-chip-grid {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.np-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px; font-family: var(--font-mono);
+}
+
+/* Project Manager Main UI */
+.pm-list-item {
+  padding: 10px 16px;
+  font-size: 13px;
+  color: #999;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.pm-list-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: #ccc;
+}
+
+.pm-list-item.active {
+  background: rgba(79, 140, 255, 0.08);
+  color: #fff;
+  border-left-color: var(--accent);
+}
+
+.pm-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.pm-tabs {
+  display: flex;
+  padding: 0 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.pm-tab {
+  padding: 14px 16px;
+  font-size: 13px;
+  color: #777;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pm-tab:hover {
+  color: #aaa;
+}
+
+.pm-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.pm-content {
+  flex: 1;
+  padding: 24px 32px;
+  overflow-y: auto;
+}
+
+.pm-tab-section {
+  display: none;
+}
+
+.pm-tab-section.active {
+  display: block;
+  animation: npFadeIn 0.2s ease;
+}
+
+.pm-footer {
+  padding: 16px 32px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pm-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #444;
+  text-align: center;
+  padding: 40px;
+}
+
+.pm-empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.2;
+}
+
+.pm-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pm-history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  transition: all 0.15s;
+}
+
+.pm-history-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.pm-history-name {
+  font-size: 13px;
+  color: #ccc;
+}
+
+.pm-history-date {
+  font-size: 11px;
+  color: #555;
+}

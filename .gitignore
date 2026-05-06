@@ -36,9 +36,12 @@ runtime/
 
 # Data (local dev only)
 data/
+history.jsonl.txt
+*.jsonl
 
 # Settings (user-specific, never committed)
-server/data/settings.json
+settings.json
+data/settings.json
 
 # Compiled binaries
 **/*.exe
@@ -46,3 +49,6 @@ server/data/settings.json
 **/*.dmg
 **/*.AppImage
 .claude/settings.local.json
+
+# Local LLM Models
+models/

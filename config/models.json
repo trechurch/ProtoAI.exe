@@ -1,0 +1,12 @@
+{
+  "entries": [
+    {
+      "id": "local-qwen2.5-coder-7b",
+      "provider": "local",
+      "name": "Qwen2.5 Coder 7B (Q4_K_M)",
+      "model_path": "models/qwen2.5-coder-7b-q4km/qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+      "context_size": 8192,
+      "enabled": true
+    }
+  ]
+}

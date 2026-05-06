@@ -43,29 +43,40 @@ impl BridgeState {
             let mut delay_secs = 2u64;
 
             loop {
-                // Wait for the current process to signal its exit
+                // Wait for the current process to signal its exit.
+                // The receiver carries the OS exit code.
                 let exit_rx = arc.lock().await.as_mut().and_then(|b| b.take_exit_rx());
-                if let Some(rx) = exit_rx {
-                    let _ = rx.await;
+                let exit_code: Option<i32> = if let Some(rx) = exit_rx {
+                    rx.await.unwrap_or(None)
                 } else {
-                    // No receiver available — bridge may have been replaced; stop this watchdog
+                    // No receiver — bridge was replaced externally; stop this watchdog
                     break;
-                }
+                };
 
-                // Process died
                 *arc.lock().await = None;
-                let count = crash_count.fetch_add(1, Ordering::SeqCst) + 1;
-                eprintln!("[Watchdog] Sidecar died (crash {count}/{MAX_CRASHES})");
 
-                if count >= MAX_CRASHES {
-                    given_up.store(true, Ordering::SeqCst);
-                    eprintln!("[Watchdog] Crash threshold reached. Waiting for manual reconnect.");
-                    break;
+                // Code 0 = Node exited cleanly because Rust dropped stdin (IPC timeout).
+                // That's expected behaviour — restart silently without counting as a crash
+                // so the 3-strike limit is reserved for genuine unexpected failures.
+                let clean_exit = exit_code == Some(0);
+                if clean_exit {
+                    eprintln!("[Watchdog] Sidecar exited cleanly (stdin closed) — restarting");
+                } else {
+                    let count = crash_count.fetch_add(1, Ordering::SeqCst) + 1;
+                    eprintln!("[Watchdog] Sidecar died (crash {count}/{MAX_CRASHES})");
+                    if count >= MAX_CRASHES {
+                        given_up.store(true, Ordering::SeqCst);
+                        eprintln!("[Watchdog] Crash threshold reached. Waiting for manual reconnect.");
+                        break;
+                    }
                 }
 
                 eprintln!("[Watchdog] Restarting sidecar in {delay_secs}s…");
                 tokio::time::sleep(Duration::from_secs(delay_secs)).await;
-                delay_secs = (delay_secs * 2).min(60);
+                // Only apply backoff on real crashes; reset after clean restarts
+                if !clean_exit {
+                    delay_secs = (delay_secs * 2).min(60);
+                }
 
                 match EngineBridge::new(&app).await {
                     Ok(bridge) => {
@@ -95,7 +106,7 @@ pub enum EngineBackend {
 
 pub struct EngineBridge {
     backend: EngineBackend,
-    exit_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+    exit_rx: Option<tokio::sync::oneshot::Receiver<Option<i32>>>,
 }
 
 // Manual Clone: oneshot::Receiver is not Clone, so we clone without it.
@@ -118,7 +129,8 @@ impl EngineBridge {
     }
 
     /// Take the exit receiver so the watchdog can await process death.
-    pub fn take_exit_rx(&mut self) -> Option<tokio::sync::oneshot::Receiver<()>> {
+    /// Returns the OS exit code when it resolves (None = process was killed without status).
+    pub fn take_exit_rx(&mut self) -> Option<tokio::sync::oneshot::Receiver<Option<i32>>> {
         self.exit_rx.take()
     }
 

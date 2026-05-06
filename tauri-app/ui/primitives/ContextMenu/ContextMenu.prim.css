@@ -1,0 +1,34 @@
+/* Last modified: 2026-05-04 03:11 UTC */
+/* ContextMenu.prim.css — SDOA v4 */
+.sdoa-context-menu {
+  position: fixed;
+  z-index: var(--z-dropdown, 100);
+  min-width: 180px;
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-xs) 0;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: all var(--duration-fast) var(--ease-default);
+  backdrop-filter: blur(12px);
+}
+.sdoa-context-menu--visible { opacity: 1; transform: scale(1); }
+
+.sdoa-context-menu__item {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-sm); color: var(--text); cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.sdoa-context-menu__item:hover { background: var(--bg-hover); }
+.sdoa-context-menu__item--disabled { opacity: 0.4; pointer-events: none; }
+.sdoa-context-menu__item--danger { color: var(--color-error); }
+.sdoa-context-menu__item--danger:hover { background: rgba(249,115,115,0.1); }
+
+.sdoa-context-menu__icon { width: 18px; text-align: center; font-size: var(--text-base); flex-shrink: 0; }
+.sdoa-context-menu__label { flex: 1; }
+.sdoa-context-menu__shortcut { font-size: var(--text-xs); color: var(--text-dim); margin-left: auto; }
+
+.sdoa-context-menu__separator { height: 1px; background: var(--border-subtle); margin: var(--space-xs) var(--space-sm); }

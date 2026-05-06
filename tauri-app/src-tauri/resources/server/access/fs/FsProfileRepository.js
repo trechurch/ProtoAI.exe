@@ -1,9 +1,29 @@
+// Last modified: 2026-05-04 03:11 UTC
 const path = require("path");
 const BaseRepository = require("./BaseRepository");
 const paths = require("../env/paths");
 
 class FsProfileRepository extends BaseRepository {
-  constructor() {
+
+    static MANIFEST = {
+        id:           "FsProfileRepository",
+        type:         "service",
+        runtime:      "NodeJS",
+        version:      "1.0.0",
+        capabilities: [],
+        dependencies: [],
+        docs: {
+            description: "Manages FsProfileRepository operations.",
+            author: "ProtoAI team",
+        },
+        actions: {
+            commands:  {},
+            triggers:  {},
+            emits:     {},
+            workflows: {},
+        },
+    };
+      constructor() {
     super(paths.cli("helpers"));
   }
 
@@ -12,6 +32,44 @@ class FsProfileRepository extends BaseRepository {
   // -----------------------------------------------------------------
   loadProfiles() {
     return this.readJson(paths.profiles(), {});
+  }
+
+  /**
+   * Unified list for the UI dropdown.
+   * Merges legacy profiles, archetypes, and user profiles.
+   * Returns an array of objects: [{ id, name, type }]
+   */
+  listAllForUI() {
+    const legacy = this.loadProfiles();
+    const archetypes = this.loadArchetypes();
+    const userProfiles = this.loadUserProfiles();
+
+    const pool = [];
+    const seen = new Set();
+
+    // 1. User-created profiles
+    userProfiles.forEach(u => {
+      seen.add(u.id);
+      pool.push({ id: u.id, name: u.name || u.id, type: "user" });
+    });
+
+    // 2. Archetypes (templates)
+    archetypes.forEach(a => {
+      if (!seen.has(a.id)) {
+        seen.add(a.id);
+        pool.push({ id: a.id, name: a.name || a.id, type: "archetype" });
+      }
+    });
+
+    // 3. Legacy profiles
+    Object.keys(legacy).forEach(id => {
+      if (!seen.has(id)) {
+        seen.add(id);
+        pool.push({ id, name: legacy[id].name || id, type: "legacy" });
+      }
+    });
+
+    return pool;
   }
 
   // -----------------------------------------------------------------

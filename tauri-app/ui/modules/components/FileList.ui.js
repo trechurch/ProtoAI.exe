@@ -1,6 +1,7 @@
 // ============================================================
 // FileList.ui.js — Windows Explorer-Style File List
 // version: 1.0.0
+// Last modified: 2026-05-04 03:11 UTC
 // depends: tauri-utils.js, EventBus.ui.js
 // ============================================================
 
@@ -37,7 +38,8 @@
             "list.dragdrop", "list.contextmenu", "list.keyboard"
         ],
         dependencies: ["tauri-utils.js", "EventBus.ui.js"],
-        docs: { description: "Windows Explorer-style file list. Full selection model, drag/drop, right-click context menu with ProtoAI extras." },
+        docs: { description: "Windows Explorer-style file list. Full selection model, drag/drop, right-click context menu with ProtoAI extras.",
+            author: "ProtoAI team" },
         actions: {
             commands: {
                 loadPath:        { description: "Load and display a directory path.", input: { path: "string" }, output: "void" },
@@ -338,8 +340,12 @@
 
         // ── ProtoAI extras ────────────────────────────────────
         const selPaths = [..._selected];
-        items.push({ label: "Add to VFS",     action: () => window.EventBus?.emit("filelist:addToVfs",     { paths: selPaths }) });
-        items.push({ label: "View manifest",  action: () => window.EventBus?.emit("filelist:viewManifest", { path: rPath     }) });
+        if (isFile) {
+            items.push({ label: "Add to VFS",        action: () => window.EventBus?.emit("filelist:addToVfs", { paths: selPaths, recursive: false }) });
+        } else {
+            items.push({ label: "Add folder to VFS", action: () => window.EventBus?.emit("filelist:addToVfs", { paths: [rPath],  recursive: true  }) });
+        }
+        items.push({ label: "View manifest",  action: () => window.EventBus?.emit("filelist:viewManifest", { path: rPath }) });
         items.push("---");
 
         // ── standard file ops ─────────────────────────────────
@@ -460,6 +466,33 @@
     function refresh() { if (_currentPath) loadPath(_currentPath); }
 
     // ── window export ─────────────────────────────────────────
+    // ── _handleDropFiles ──
+
+    async function _handleDropFiles(paths, targetDir, isCopy) {
+        let successCount = 0;
+        for (const p of paths) {
+            const parentDir = p.replace(/[\\/][^\\/]+$/, "");
+            if (p === targetDir || targetDir.startsWith(p + "/") || parentDir === targetDir) continue;
+            const fileName = p.split(/[\\/]/).pop();
+            const newPath = targetDir + "/" + fileName;
+            try {
+                if (isCopy) {
+                    await window.backendConnector?.runWorkflow("fs_copy", { src: p, dest: newPath });
+                } else {
+                    await window.backendConnector?.runWorkflow("fs_rename", { old_path: p, new_path: newPath });
+                }
+                successCount++;
+            } catch (err) {
+                window.showToast?.(`Failed to ${isCopy ? 'copy' : 'move'} ${fileName}: ${err.message}`);
+            }
+        }
+        if (successCount > 0) {
+            _selected.clear();
+            refresh();
+            window.showToast?.(`${isCopy ? 'Copied' : 'Moved'} ${successCount} item(s)`);
+        }
+    }
+
     window.FileList = { MANIFEST, render, loadPath, refresh, getSelection, clearSelection };
 
     domReady(() => {
