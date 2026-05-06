@@ -1,6 +1,6 @@
 [package]
 name = "protoai"
-version = "0.1.2"
+version = "0.2.0"
 description = "An AI interface App"
 authors = ["Tre'"]
 edition = "2021"
