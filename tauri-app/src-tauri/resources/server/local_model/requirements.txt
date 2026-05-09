@@ -1,0 +1,29 @@
+# ProtoAI — Local AI Python requirements
+# Installed into %APPDATA%\protoai\ai_env\ on first setup.
+# bootstrap.py handles the install sequence.
+
+# ── Core inference stack ────────────────────────────────────
+# PyTorch — CPU build by default; CUDA build auto-selected by bootstrap.py
+# if a compatible GPU is detected.
+torch>=2.1.0
+
+# Transformers — must be the Qwen2.5-Omni preview branch.
+# bootstrap.py installs from GitHub directly; this entry acts as a floor
+# for version checks only.
+transformers>=4.51.0
+
+# Accelerate — required for device_map="auto" and low_cpu_mem_usage
+accelerate>=0.26.0
+
+# Safetensors — faster model weight loading
+safetensors>=0.4.0
+
+# HuggingFace Hub — model download and caching
+huggingface_hub>=0.20.0
+
+# ── Optional multimodal extras (audio/video) ───────────────
+# Not required for text-only Silent Partner use, but listed here so a
+# future full-multimodal install only needs to uncomment:
+# qwen-omni-utils>=0.0.2
+# soundfile>=0.12.0
+# librosa>=0.10.0

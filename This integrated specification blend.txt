@@ -1,0 +1,164 @@
+This integrated specification blends your deterministic, root-relative storage rules with the hierarchical definitions of Knowledge and Wisdom. It reinforces the principle that ProtoAI memory is a structured asset, not an emergent hallucination.
+PROTOAI MEMORY DISTILLATION & STORAGE RULES (v2.0)
+Portable • Deterministic • Multi-Model • User-Controlled
+
+The Six Classes of ProtoAI Memory
+ProtoAI recognizes six distinct memory classes, categorized by their source, persistence, and role in the reasoning chain.
+[PERMANENT / STABLE]
+
+
+Identity Memory: Who the user is. Stable personal facts, long-term preferences, and professional background. Stored in /protoai/memory/identity.json.
+Knowledge: The "Information Library." Explicit facts, datasets, and structured documentation (RAG-ready). Stored in /protoai/memory/knowledge/ or project-specific folders.
+Wisdom: The "Synthesized Intuition." High-level reasoning patterns and strategic insights derived from past project outcomes. This is the Distilled Output of Identity, Project, and Workflow memory.
+
+[PROJECT / OPERATIONAL]
+
+Project Memory: Facts tied to a specific project folder. Architecture decisions, constraints, and naming conventions. Stored in /projects/<project>/memory/project.json.
+Workflow Memory: Operational preferences for a specific pipeline (e.g., ingestion rules, model routing). Stored in /protoai/memory/workflows/<workflow>.json.
+
+[TRANSIENT]
+
+Ephemeral Session Memory: Temporary reasoning traces, scratchpad notes, and summaries of the active conversation. Stored in RAM or /protoai/tmp/.
+
+
+Memory Distillation Rules
+Distillation is the mechanical process of compressing atomic memory items into a canonical, minimal, and lossless representation (Wisdom).
+2.1 Distillation Eligibility & Triggers
+
+
+Eligible: Identity, Project, and Workflow memory.
+Ineligible: Ephemeral Session memory (never distilled).
+Triggers: 1. A project exceeds N = 50 memory items. 2. A workflow exceeds N = 20 memory items. 3. Manual user request. 4. Stability Threshold: A memory item is updated > 3 times.
+
+2.2 The Distillation Method (Lossless Compression)
+
+Merge: Combine duplicates and overlapping entries.
+Collapse: Group related items into a single structured entry.
+Preserve: Maintain user intent and verbatim constraints.
+No Inference: Never invent new facts or "read between the lines."
+Format: Output must be Deterministic JSON.
+
+2.3 The Distilled Schema
+Every distilled entry (representing a piece of Wisdom) must follow this structure:
+JSON
+text{
+  "id": "uuid",
+  "type": "identity|project|workflow|knowledge",
+  "source": "user|system|distilled",
+  "created_at": "ISO8601",
+  "updated_at": "ISO8601",
+  "content": {
+      "summary": "High-level distilled insight",
+      "verbatim": ["Original user instruction 1", "Original user instruction 2"],
+      "constraints": ["Hard constraint A", "Hard constraint B"],
+      "tags": ["architecture", "preference", "naming"]
+  }
+}
+
+Memory Storage Rules
+ProtoAI utilizes a portable, drive-agnostic, root-relative structure.
+
+
+3.1 Identity Memory: /protoai/memory/identity.json (Encrypted, versioned).
+3.2 Project Memory: /projects/<project>/memory/project.json (Travels with the project).
+3.3 Workflow Memory: /protoai/memory/workflows/<workflow>.json (Load on demand).
+3.4 Knowledge Storage: /protoai/knowledge/ (Indexed via vector store or JSON-LD).
+3.5 Ephemeral Storage: /protoai/tmp/session/<session_id>.json (Auto-delete after 24h).
+
+
+Memory Injection & Priority Rules
+Memory is never "blindly" injected. It is gated and prioritized to ensure the most specific context wins.
+4.1 Injection Priority (Top to Bottom)
+User Prompt (Absolute Authority)
+Ephemeral Session Memory (Current Context)
+Project Memory (Domain Context)
+Workflow Memory (Operational Context)
+Wisdom / Knowledge (Pattern/Fact Context)
+Identity Memory (Baseline Context)
+SDOA Core Rules (System Guardrails)
+
+4.2 Injection Format
+Memory is injected as structured context blocks:
+Plaintext
+text[MEMORY:PROJECT]
+- Architecture: SDOA v3
+- Path rules: root-relative, drive-agnostic
+[MEMORY:WISDOM]
+- Past Insight: Model switching is most stable when state is synced via Firestore.
+
+Memory Safety & Governance
+
+
+No Silent Changes: All distillation must be logged and visible.
+No Cross-Pollination: Project Memory A cannot leak into Project Memory B.
+Full Portability: No hardcoded absolute paths (C:\Users...). Use root-relative paths only.
+User Rights: Every memory class can be Viewed, Edited, Exported, or Purged by the user.
+
+
+The Non-Negotiables
+No destructive automation.
+No hallucinated memory.
+No sensitive data in logs.
+Deterministic behavior across machines.
+Original user verbatim must be preserved in all distilled entries.
+
+Does this blended structure accurately capture how you want Knowledge and Wisdom to sit alongside your technical storage rules?
+Choice B
+PROTOAI MEMORY, KNOWLEDGE, & DISTILLATION SPECIFICATION
+Portable, Deterministic, Multi-Model, and SDOA-Aligned
+ProtoAI treats memory, knowledge, and wisdom as structured, explicit, and user-controlled data—never as emergent or unpredictable model behaviors. The system organizes context into four active memory classes and two foundational cognitive layers to maintain absolute determinism across different LLM backends.
+
+Cognitive Architecture: Memory, Knowledge, and Wisdom
+
+text┌────────────────────────────────────────────────────────┐
+│                     WISDOM LAYER                       │
+│      (Synthesized Reasoning Patterns & Heuristics)     │
+└───────────────────────────┬────────────────────────────┘
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                    KNOWLEDGE LAYER                     │
+│         (Static Reference Library & RAG Files)         │
+└───────────────────────────┬────────────────────────────┘
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                  ACTIVE MEMORY CLASSES                 │
+│  Identity  │  Project  │  Workflow  │ Ephemeral Session│
+└────────────────────────────────────────────────────────┘
+The Active Memory Classes (User-Owned & Distillable)
+Identity Memory (The Core Persona)
+
+Definition: Who the user is, stable personal facts, long-term preferences, and behavioral baselines.
+Scope: Universal across all projects and sessions.
+Expiration: Never expires unless explicitly deleted by the user.
+
+Project Memory (The Domain Sandbox)
+
+Definition: Facts, architecture decisions, naming conventions, structural constraints, and files tied specifically to a targeted directory.
+Scope: Sandboxed to the active project folder.
+Expiration: Persists within the project directory; travels with the project codebase.
+
+Workflow Memory (The Process Logic)
+
+Definition: Operational preferences for execution sequences (e.g., document ingestion rules, model routing configs, token context limits).
+Scope: Active only when the specific workflow pipeline is triggered.
+Expiration: Stored in workflow configs; loaded dynamically.
+
+Ephemeral Session Memory (The Working RAM)
+
+Definition: Temporary conversational reasoning traces, prompt-by-prompt variables, and summaries of the active chat.
+Scope: Single session thread.
+Expiration: Automatically purged or pruned based on session bounds.
+Rule: Ephemeral Session Memory is strictly volatile and is never eligible for distillation.
+
+The Foundational Cognitive Layers (Static & Emergent)
+Knowledge (The Information Library)
+
+Definition: Structured, external, or system-wide explicit facts, local Markdown documentation, codebase index schemas, and retrieved vector embeddings (RAG).
+System Role: Serves as the static ground-truth database. Unlike dynamic memory, Knowledge is read-only during standard operations and does not change without direct user file modifications.
+Rule: Knowledge is not distilled; it is queried deterministically via indexing.
+
+Wisdom (The Synthesized Intuition)
+
+Definition: High-level, cross-project reasoning patterns, optimized model-routing strategies, and strategic heuristics derived from successful execution traces.
+System Role: Represents the "meta-learning" layer. When the distillation engine identifies stable, repeated success paths across Workflows and Projects, it synthesizes these insights into "Wisdom patterns" (e.g., SDOA adapter updates, behavior profile overrides).
+Rule: Wisdom is generated as the ultimate output of long-term Memory Distillation, human-audited, and saved as deterministic behavioral heuristics.

@@ -21,9 +21,16 @@ class PathResolver {
             workflows: {},
         },
     };
-      constructor() {
-    this.root = process.env.PROTOAI_ROOT || process.cwd();
-  }
+    constructor() {
+        let root = process.env.PROTOAI_ROOT || process.cwd();
+        
+        // SDOA v4 Smart Root: If running inside tauri-app, the real root is one level up.
+        if (!process.env.PROTOAI_ROOT && root.toLowerCase().endsWith("tauri-app")) {
+            root = path.join(root, "..");
+        }
+        
+        this.root = root;
+    }
 
   resolve(...parts) {
     return path.join(this.root, ...parts);
@@ -59,32 +66,58 @@ class PathResolver {
     return this.cli("helpers", "profiles.json");
   }
 
-  globalMemory() {
-    return this.data("memory-global.json");
+  // Cognitive Layers (v2.1)
+  memoryRoot() {
+    return this.resolve("protoai", "memory");
   }
 
+  identityMemory() {
+    return path.join(this.memoryRoot(), "identity.json");
+  }
+
+  wisdomMemory() {
+    return path.join(this.memoryRoot(), "wisdom.json");
+  }
+
+  workflowMemory(id) {
+    return path.join(this.memoryRoot(), "workflows", `${id}.json`);
+  }
+
+  knowledgeDir() {
+    return this.resolve("protoai", "knowledge");
+  }
+
+  ephemeralDir() {
+    return this.resolve("protoai", "tmp", "session");
+  }
+
+  // Project Layer
   projectMemory(project) {
-    return this.projects(project, "memory.json");
+    return this.data("projects", project, "memory", "project.json");
+  }
+
+  projectKnowledge(project) {
+    return this.data("projects", project, "knowledge");
   }
 
   projectDir(project) {
-    return this.projects(project);
+    return this.data("projects", project);
+  }
+
+  userProfiles(...p) {
+    return this.resolve("protoai", "profiles", ...p);
+  }
+
+  userProfile() {
+    return this.resolve("protoai", "memory", "identity.json");
   }
 
   archetypes(...p) {
     return this.data("archetypes", ...p);
   }
 
-  userProfiles(...p) {
-    return this.data("user-profiles", ...p);
-  }
-
-  userProfile() {
-    return this.data("user-profile.json");
-  }
-
   // ── VFS paths ─────────────────────────────────────────────
-  vfs(project, ...p)          { return this.projects(project, "vfs", ...p); }
+  vfs(project, ...p)          { return this.resolve("projects", project, "vfs", ...p); }
   vfsIndex(project)           { return this.vfs(project, "index.json"); }
   vfsManifests(project)       { return this.vfs(project, "manifests"); }
   vfsManifest(project, id)    { return this.vfs(project, "manifests", id + ".json"); }

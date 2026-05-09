@@ -29,8 +29,9 @@
 const fs    = require("fs");
 const path  = require("path");
 const paths = require("../../access/env/paths");
-const local = require("../../access/llm/LocalModelAdapter");
+let local = null; // Lazy-loaded to avoid circular deps
 const memory = require("../../lib/MemoryManager");
+const Middleware = require("../../services/Middleware.service");
 
 // ── helpers ───────────────────────────────────────────────
 
@@ -106,24 +107,66 @@ class MultiModelOrchestrator {
     emit(event, data)   { for (const l of this._listeners) { if (l.event === event) try { l.handler(data); } catch (_) {} } }
 
     // ── _getModelPath ─────────────────────────────────────────
-    // Reads models.json once and caches the resolved local model path.
+    // Reads models.json and returns either:
+    //   - A HuggingFace model name string (for python-http backend)
+    //   - An absolute GGUF file path (for legacy llama-cpp backend)
+    //   - null if no usable model is configured
+    //
+    // Also caches the resolved entry so callers can check opts.backend.
     _getModelPath() {
-        if (this._modelPath) return this._modelPath;
+        if (!local || typeof local.generate !== 'function') {
+            local = require("../../access/llm/LocalModelAdapter");
+        }
+        if (this._modelPath !== undefined) return this._modelPath;
+        this._modelEntry = null;
         try {
-            const file   = paths.resolve("config", "models.json");
-            const models = JSON.parse(fs.readFileSync(file, "utf8"));
-            const entry  = (models.entries || []).find(m => m.provider === "local");
-            if (!entry) { console.error("[Orchestrator] No local model entry in models.json"); return null; }
-            this._modelPath = _resolveModelPath(entry.model_path);
-            if (!fs.existsSync(this._modelPath)) {
-                console.error("[Orchestrator] GGUF not found at:", this._modelPath);
+            const file = paths.resolve("config", "models.json");
+            Middleware.log(`[Orchestrator] Reading models config from: ${file}`);
+            if (!fs.existsSync(file)) {
+                Middleware.log(`[Orchestrator] models.json MISSING at ${file}`);
                 this._modelPath = null;
+                return null;
             }
+            const models = JSON.parse(fs.readFileSync(file, "utf8"));
+            const entry  = (models.entries || []).find(m => m.provider === "local" && m.enabled !== false);
+            if (!entry) {
+                Middleware.log("[Orchestrator] No enabled 'local' provider found in models.json");
+                this._modelPath = null;
+                return null;
+            }
+
+            // python-http backend: model is identified by HuggingFace model name
+            if (entry.backend === "python-http") {
+                this._modelEntry = entry;
+                this._modelPath  = entry.model_name || entry.id;
+                Middleware.log(`[Orchestrator] python-http backend: ${this._modelPath} on :${entry.port || 17892}`);
+                return this._modelPath;
+            }
+
+            // Legacy llama-cpp backend: model is a GGUF file path
+            const resolved = _resolveModelPath(entry.model_path);
+            Middleware.log(`[Orchestrator] Resolved GGUF path: ${resolved}`);
+            if (!fs.existsSync(resolved)) {
+                Middleware.log("[Orchestrator] GGUF FILE MISSING at:", resolved);
+                this._modelPath = null;
+                return null;
+            }
+            this._modelEntry = entry;
+            this._modelPath  = resolved;
         } catch (e) {
-            console.error("[Orchestrator] Cannot resolve local model path:", e.message);
+            Middleware.log("[Orchestrator] Model path resolution failed:", e.message);
             this._modelPath = null;
         }
         return this._modelPath;
+    }
+
+    // Returns generate opts appropriate for the current backend
+    _modelOpts(extras = {}) {
+        const entry = this._modelEntry;
+        if (entry?.backend === "python-http") {
+            return { backend: "python-http", port: entry.port || 17892, ...extras };
+        }
+        return { modelPath: this._modelPath, ...extras };
     }
 
     _budget(promptText, systemText = "", maxResponse = 256) {
@@ -149,7 +192,7 @@ class MultiModelOrchestrator {
         const budget = this._budget(prompt, sys, 80);
 
         try {
-            const raw    = await local.generate(prompt, { modelPath, maxTokens: budget.responseTokens, temperature: 0.05, systemPrompt: sys });
+            const raw    = await local.generate(prompt, this._modelOpts({ maxTokens: budget.responseTokens, temperature: 0.05, systemPrompt: sys }));
             const result = _safeJson(raw, fallback);
             this.emit("orchestrator:routed", {
                 type:       result.type       || "chat",
@@ -158,7 +201,7 @@ class MultiModelOrchestrator {
             });
             return { ...fallback, ...result, skipped: false };
         } catch (e) {
-            console.error("[Orchestrator] route error:", e.message);
+            Middleware.log("[Orchestrator] route error:", e.message);
             this.emit("orchestrator:error", { stage: "route", message: e.message });
             return { ...fallback, error: e.message };
         }
@@ -183,12 +226,11 @@ class MultiModelOrchestrator {
         const budget = this._budget(message, sys, 400);
 
         try {
-            const out = await local.generate(message, {
-                modelPath,
+            const out = await local.generate(message, this._modelOpts({
                 maxTokens:   budget.responseTokens,
                 temperature: 0.2,
                 systemPrompt: sys,
-            });
+            }));
 
             // Reject if the rewrite is too short or clearly broken
             const engineered = (out && out.trim().length > 12) ? out.trim() : message;
@@ -225,7 +267,7 @@ class MultiModelOrchestrator {
         const budget = this._budget(prompt, sys, 60);
 
         try {
-            const raw    = await local.generate(prompt, { modelPath, maxTokens: budget.responseTokens, temperature: 0.05, systemPrompt: sys });
+            const raw    = await local.generate(prompt, this._modelOpts({ maxTokens: budget.responseTokens, temperature: 0.05, systemPrompt: sys }));
             const result = _safeJson(raw, { ok: true });
             if (result.flag) this.emit("orchestrator:flagged", { flag: result.flag });
             return result;
@@ -252,7 +294,7 @@ class MultiModelOrchestrator {
         const budget = this._budget(prompt, sys, 150);
 
         try {
-            const raw    = await local.generate(prompt, { modelPath, maxTokens: budget.responseTokens, temperature: 0.1, systemPrompt: sys });
+            const raw    = await local.generate(prompt, this._modelOpts({ maxTokens: budget.responseTokens, temperature: 0.1, systemPrompt: sys }));
             const result = _safeJson(raw, { score: null, issues: [], note: "", user_observation: null });
             this.emit("orchestrator:audited", {
                 score: result.score ?? null,
@@ -296,18 +338,23 @@ Rules:
         const prompt = `User asked: "${message.slice(0, 200)}..."\nPrime model replied: "${response.slice(0, 400)}..."\n\nGenerate your ${persona} commentary:`;
 
         try {
-            const out = await local.generate(prompt, {
-                modelPath,
-                maxTokens: 120,
-                temperature: 0.8,
-                systemPrompt: sys
-            });
+            // SDOA v4 Safety: Race against 10s timeout to prevent UI hangs
+            const out = await Promise.race([
+                local.generate(prompt, this._modelOpts({
+                    maxTokens: 120,
+                    temperature: 0.8,
+                    systemPrompt: sys,
+                })),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Local model timeout")), 10000))
+            ]);
+            
             const text = out ? out.trim().replace(/^["']|["']$/g, "") : "";
             this.emit("orchestrator:commentary", { text, persona });
             return { text, persona, skipped: false };
         } catch (e) {
-            console.error("[Orchestrator] commentary error:", e.message);
-            return { text: "", skipped: true };
+            Middleware.log("[Orchestrator] commentary failed:", e.message);
+            this.emit("orchestrator:error", { phase: "commentary", error: e.message });
+            return { text: "", skipped: true, error: e.message };
         }
     }
 }

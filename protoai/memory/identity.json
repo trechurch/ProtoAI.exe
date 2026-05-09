@@ -1,0 +1,14 @@
+{
+  "name": "User",
+  "preferences": {},
+  "style": "balanced",
+  "observations": [
+    {
+      "content": "User likes to write code in Rust and prefers a concise style.",
+      "ts": 1777772530738,
+      "project": null
+    }
+  ],
+  "traits": [],
+  "lastUpdated": "2026-05-03T01:42:10.728Z"
+}

@@ -258,11 +258,13 @@
     async function _saveSettings(settings) {
         try {
             if (window.backendConnector) {
-                await window.backendConnector.runWorkflow("saveSettings", { settings });
+                // Route through the "settings" IPC handler → settingsManager.importAll()
+                await window.backendConnector.runWorkflow("settings", { action: "set", value: settings });
             }
             window.StateStore?.set("settings", settings);
-            window.ToastPrim.show("Settings saved successfully.", "success");
-            if (window.EventBus) window.EventBus.emit("settingsSaved", { settings });
+            window.ToastPrim.show("Settings saved. Changes apply immediately.", "success");
+            // Broadcast so any module can hot-apply without a reload
+            window.EventBus?.emit("settings:changed", { settings });
         } catch (err) {
             window.ToastPrim.show("Failed to save settings: " + err.message, "error");
         }

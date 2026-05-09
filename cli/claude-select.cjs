@@ -3,7 +3,7 @@
 
 const _pathsAbsolute = process.env.PROTOAI_ROOT
     ? require('path').join(process.env.PROTOAI_ROOT, 'tauri-app', 'src-tauri', 'resources', 'server', 'access', 'env', 'paths')
-    : require('path').join(__dirname, '..', 'server', 'access', 'env', 'paths');
+    : require('path').join(__dirname, '..', 'tauri-app', 'src-tauri', 'resources', 'server', 'access', 'env', 'paths');
 const paths = require(_pathsAbsolute);
 
 const fs = require("fs");
@@ -324,31 +324,37 @@ function isFailoverError(err, statusCode) {
 // -------------------------------
 function processOutput(text) {
     let output = text.trim();
+    const original = output;
 
     if (p.cot === "suppress") {
-        const coTMarkers = ["<think>", "Reasoning:", "Thought process:", "Step 1:", "Step by step"];
+        const coTMarkers = ["<think>", "Reasoning:", "Thought process:"];
         const lower = output.toLowerCase();
         for (const marker of coTMarkers) {
             const idx = lower.indexOf(marker.toLowerCase());
             if (idx >= 0) {
-                const endIdx = output.toLowerCase().includes("</think>")
-                    ? output.toLowerCase().indexOf("</think>") + 9
-                    : idx;
-                output = output.slice(0, idx).trim() + output.slice(endIdx).trim();
+                const endTag = "</think>";
+                const endIdx = lower.indexOf(endTag);
+                if (endIdx > idx) {
+                    output = (output.slice(0, idx) + output.slice(endIdx + endTag.length)).trim();
+                } else {
+                    // If no closing tag, just remove the marker and everything after it for now
+                    output = output.slice(0, idx).trim();
+                }
                 break;
             }
         }
     }
 
-    if (p.verbosity === "concise") {
-        output = output.split("\n\n").slice(0, 3).join("\n\n");
+    if (p.verbosity === "concise" && output.length > 500) {
+        output = output.split("\n\n").slice(0, 5).join("\n\n");
     }
 
-    // Parse and handle MEMORY_RECORD: tags
+    // Handle MEMORY_RECORD: tags but don't let it empty the output
     handleMemoryRecords(text);
-    output = output.split("\n").filter(l => !l.includes("MEMORY_RECORD:")).join("\n").trim();
-
-    return output;
+    const filtered = output.split("\n").filter(l => !l.includes("MEMORY_RECORD:")).join("\n").trim();
+    
+    // If we've scrubbed it too much, return the original (trimmed)
+    return filtered || output || original;
 }
 
 function handleMemoryRecords(text) {

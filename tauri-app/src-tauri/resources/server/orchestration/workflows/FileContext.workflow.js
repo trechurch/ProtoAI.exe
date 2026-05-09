@@ -242,7 +242,7 @@ class FileContextWorkflow {
       async run(context) {
     const { project, message, maxBytes } = context || {};
     if (!project) {
-      return new WorkflowResult("error", { error: "Missing 'project' parameter" });
+      return new WorkflowResult("error", null, "Missing 'project' parameter");
     }
 
     const perms = loadPermissions(project);
@@ -369,7 +369,71 @@ ${allFiles.map(f => `- ${f}`).join("\n")}
 --- END PROJECT FILES OVERVIEW ---\n\n`;
     }
 
-    const contextString = semanticContext + fileListContext + (parts.length > 0 ? parts.join("\n\n") : "");
+    // Step 5: Inject VFS manifest summaries so the LLM knows the purpose of
+    // registered files even when their content isn't in the eager/cached tier.
+    let vfsContext = "";
+    try {
+      const vfsIndexPath = path.join(projectDir, "..", "..", "vfs", "index.json");
+      // Canonical path: data/projects/{project}/vfs/index.json
+      const canonicalVfs = path.join(pathsModule.projectDir(project), "..", "vfs", "index.json")
+                             .replace(/\\/g, "/");
+      // Try both possible locations
+      const vfsCandidates = [
+        path.join(projectDir, "vfs", "index.json"),
+        path.join(path.dirname(projectDir), project, "vfs", "index.json"),
+        path.join(pathsModule.root, "data", "projects", project, "vfs", "index.json"),
+      ];
+
+      let vfsIndex = null;
+      for (const candidate of vfsCandidates) {
+        if (fs.existsSync(candidate)) {
+          vfsIndex = JSON.parse(fs.readFileSync(candidate, "utf8"));
+          break;
+        }
+      }
+
+      if (vfsIndex && Array.isArray(vfsIndex.entries) && vfsIndex.entries.length > 0) {
+        const manifestDir = path.join(path.dirname(
+          vfsCandidates.find(c => fs.existsSync(c)) || vfsCandidates[0]
+        ), "manifests");
+
+        const lines = [];
+        for (const entry of vfsIndex.entries) {
+          const rel = entry.realPath
+            ? path.relative(projectDir, entry.realPath).replace(/\\/g, "/")
+            : (entry.name || entry.id);
+
+          // Read manifest if available
+          let summary = entry.summary || "";
+          if (!summary && entry.id) {
+            const mPath = path.join(manifestDir, `${entry.id}.json`);
+            if (fs.existsSync(mPath)) {
+              try {
+                const m = JSON.parse(fs.readFileSync(mPath, "utf8"));
+                summary = m.summary || m.description || "";
+              } catch (_) {}
+            }
+          }
+
+          const perms = entry.permissions || {};
+          const permStr = [
+            perms.read    ? "read"    : "",
+            perms.write   ? "write"   : "",
+            perms.execute ? "execute" : "",
+          ].filter(Boolean).join("+") || "read";
+
+          lines.push(`- ${rel} [${entry.type || "file"}, ${permStr}]${summary ? `: ${summary}` : ""}`);
+        }
+
+        if (lines.length > 0) {
+          vfsContext = `--- VFS REGISTRY (${lines.length} files) ---\n${lines.join("\n")}\n--- END VFS REGISTRY ---\n\n`;
+        }
+      }
+    } catch (_) {
+      // VFS not configured for this project — skip silently
+    }
+
+    const contextString = semanticContext + vfsContext + fileListContext + (parts.length > 0 ? parts.join("\n\n") : "");
 
     return new WorkflowResult("ok", {
       files: {

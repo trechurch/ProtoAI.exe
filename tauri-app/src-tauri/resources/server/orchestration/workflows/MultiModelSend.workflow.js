@@ -81,10 +81,14 @@ class MultiModelSendWorkflow extends WorkflowBase {
         const events = [];
         const _track = (type, data = {}) => {
             events.push({ type, ts: Date.now(), data });
+            // Broadcast to global bus for real-time UI updates (e.g. Ticker)
+            if (typeof window !== "undefined" && window.EventBus) {
+                window.EventBus.emit(type, data);
+            }
         };
 
-        // Collect orchestrator events into the log
-        const _onOrchestratorEvent = (type) => (data) => _track(type, data);
+        // Collect orchestrator events into the log using stable references
+        const handlers = new Map();
         const _evtTypes = [
             "orchestrator:routing", "orchestrator:routed",
             "orchestrator:engineering", "orchestrator:engineered",
@@ -93,7 +97,12 @@ class MultiModelSendWorkflow extends WorkflowBase {
             "orchestrator:commentary_generating", "orchestrator:commentary",
             "orchestrator:error",
         ];
-        _evtTypes.forEach(t => orchestrator.on(t, _onOrchestratorEvent(t)));
+        
+        _evtTypes.forEach(t => {
+            const h = (data) => _track(t, data);
+            handlers.set(t, h);
+            orchestrator.on(t, h);
+        });
 
         try {
             // ── 1. Route ──────────────────────────────────────
@@ -157,13 +166,11 @@ class MultiModelSendWorkflow extends WorkflowBase {
                 const primeError  = primaryResult.data?.error  || primaryResult.error  || "Prime workflow failed";
                 const primeDetail = primaryResult.data?.detail || primaryResult.detail || undefined;
                 return new WorkflowResult("error", {
-                    error:  primeError,
-                    ...(primeDetail ? { detail: primeDetail } : {}),
                     orchestrator: { events, routeResult, engineerResult },
-                });
+                }, primeError);
             }
 
-            const primeReply = primaryResult.data?.reply || "";
+            const primeReply = stream ? watchBuffer : (primaryResult.data?.reply || "");
 
             // ── 4. Audit ──────────────────────────────────────
             let auditResult = { score: null, issues: [], note: "", skipped: true };
@@ -201,7 +208,7 @@ class MultiModelSendWorkflow extends WorkflowBase {
 
         } finally {
             // Cleanup: remove orchestrator listeners so they don't leak
-            _evtTypes.forEach(t => orchestrator.off(t, _onOrchestratorEvent(t)));
+            handlers.forEach((h, t) => orchestrator.off(t, h));
         }
     }
 }

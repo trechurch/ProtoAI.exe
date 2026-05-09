@@ -1,141 +1,67 @@
-// ============================================================
-// ModuleLoader.service.js — SDOA v4 Module Discovery & Lifecycle
-// version: 4.0.0
-// Last modified: 2026-05-04 03:11 UTC
-// layer: 3 (service)
-//
-// Discovers all v4 modules, validates manifests, and orchestrates
-// the init → mount lifecycle in dependency order.
-//
-// Modules register themselves via ModuleLoader.register(manifest, instance).
-// The loader resolves the dependency graph and calls lifecycle
-// methods in the correct order.
-// ============================================================
+/* ============================================================
+   ModuleLoader.service.js — SDOA v4 System Conductor
+   version: 4.1.0
+   Last modified: 2026-05-09 04:02 UTC
+   ============================================================ */
 
 (function () {
     "use strict";
 
-    // ── SDOA v4 MANIFEST ─────────────────────────────────────
     const MANIFEST = {
         id:       "ModuleLoader",
         type:     "service",
         layer:    3,
         runtime:  "Browser",
-        version:  "4.0.0",
-
+        version:  "4.1.0",
         requires: [],
-        dataFiles: [],
-
         lifecycle: ["init"],
-
-        actions: {
-            commands: {
-                register:   { description: "Register a module with its manifest and instance.",  input: { manifest: "object", instance: "object" }, output: "void" },
-                initAll:    { description: "Initialize all registered modules in dependency order.", input: {}, output: "Promise<void>" },
-                mountAll:   { description: "Mount all initialized modules.",                     input: { containers: "object" }, output: "Promise<void>" },
-                getModule:  { description: "Get a registered module instance by ID.",            input: { id: "string" }, output: "object|null" },
-                listAll:    { description: "List all registered module manifests.",               input: {}, output: "object[]" },
-            },
-            events: {
-                "module:registered":  { payload: "{ id, type, layer }" },
-                "module:initialized": { payload: "{ id }" },
-                "module:mounted":     { payload: "{ id }" },
-                "module:error":       { payload: "{ id, phase, error }" },
-            },
-            accepts: {},
-            slots: {},
-        },
-
-        backendDeps: [],
-
         docs: {
-            description: "Discovers, validates, and orchestrates the lifecycle of all SDOA v4 modules. Resolves dependency graphs and calls init/mount in order.",
-            author: "ProtoAI team",
-            sdoa: "4.0.0"
+            description: "Orchestrates the discovery, validation, and lifecycle of all SDOA modules. Acts as the system conductor for health and diagnostics.",
+            author: "ProtoAI Team"
         }
     };
-    // ── end MANIFEST ─────────────────────────────────────────
 
-    // ── Internal registry ────────────────────────────────────
-    const _modules = new Map();  // id → { manifest, instance, state }
+    // ── Internal Registry ────────────────────────────────────
+    const _modules = new Map();  // id → { manifest, instance, state, health }
     // state: "registered" | "initialized" | "mounted" | "error"
+    // health: "healthy" | "stalled" | "degraded" | "failed"
 
-    // ── register ─────────────────────────────────────────────
+    // ── Registration ─────────────────────────────────────────
     function register(manifest, instance) {
         if (!manifest?.id) {
-            console.error("[ModuleLoader] Cannot register module without manifest.id");
+            console.error("[Conductor] Cannot register anonymous module.");
             return;
         }
 
         if (_modules.has(manifest.id)) {
-            console.warn(`[ModuleLoader] Module "${manifest.id}" already registered. Skipping.`);
+            console.warn(`[Conductor] Module "${manifest.id}" already active. skipping.`);
             return;
         }
 
-        // Validate required manifest fields
         const validated = {
             id:       manifest.id,
             type:     manifest.type     || "unknown",
             layer:    manifest.layer    || 0,
             version:  manifest.version  || "0.0.0",
-            requires: manifest.requires || [],
+            requires: manifest.requires || manifest.dependencies || [],
             lifecycle: manifest.lifecycle || [],
-            actions:  manifest.actions  || {},
-            backendDeps: manifest.backendDeps || [],
         };
 
         _modules.set(manifest.id, {
             manifest: validated,
             instance,
             state: "registered",
+            health: "healthy"
         });
 
-        if (window.EventBus) {
-            window.EventBus.emit("module:registered", {
-                id: validated.id,
-                type: validated.type,
-                layer: validated.layer,
-            });
-        }
+        window.EventBus?.emit("module:registered", { id: validated.id, layer: validated.layer });
     }
 
-    // ── _resolveDependencyOrder ───────────────────────────────
-    // Topological sort of modules based on `requires` field.
-    function _resolveDependencyOrder() {
-        const sorted   = [];
-        const visited  = new Set();
-        const visiting = new Set();
-
-        function visit(id) {
-            if (visited.has(id)) return;
-            if (visiting.has(id)) {
-                console.error(`[ModuleLoader] Circular dependency detected: ${id}`);
-                return;
-            }
-
-            visiting.add(id);
-            const mod = _modules.get(id);
-            if (mod) {
-                for (const dep of mod.manifest.requires) {
-                    visit(dep);
-                }
-            }
-            visiting.delete(id);
-            visited.add(id);
-            if (mod) sorted.push(id);
-        }
-
-        for (const id of _modules.keys()) {
-            visit(id);
-        }
-
-        return sorted;
-    }
-
-    // ── initAll ──────────────────────────────────────────────
+    // ── Boot Sequence ────────────────────────────────────────
+    
     async function initAll() {
         const order = _resolveDependencyOrder();
-        console.log(`[ModuleLoader] Initializing ${order.length} modules in order:`, order);
+        console.log(`[Conductor] Starting boot sequence for ${order.length} modules...`);
 
         for (const id of order) {
             const mod = _modules.get(id);
@@ -143,27 +69,22 @@
 
             try {
                 if (typeof mod.instance.init === "function") {
+                    console.log(`[Conductor] Initializing Layer ${mod.manifest.layer} -> ${id}`);
                     await mod.instance.init();
                 }
                 mod.state = "initialized";
-
-                if (window.EventBus) {
-                    window.EventBus.emit("module:initialized", { id });
-                }
+                window.EventBus?.emit("module:initialized", { id });
             } catch (err) {
                 mod.state = "error";
-                console.error(`[ModuleLoader] Failed to init "${id}":`, err);
-
-                if (window.EventBus) {
-                    window.EventBus.emit("module:error", { id, phase: "init", error: err.message });
-                }
+                mod.health = "failed";
+                console.error(`[Conductor] Initialization FAILED for "${id}":`, err);
+                window.EventBus?.emit("module:error", { id, phase: "init", error: err.message });
             }
         }
     }
 
-    // ── mountAll ─────────────────────────────────────────────
-    // containers: { moduleId: HTMLElement, ... }
     async function mountAll(containers = {}) {
+        console.log("[Conductor] Mounting UI features...");
         for (const [id, mod] of _modules) {
             if (mod.state !== "initialized") continue;
 
@@ -174,47 +95,87 @@
                     await mod.instance.mount(container);
                 }
                 mod.state = "mounted";
-
-                if (window.EventBus) {
-                    window.EventBus.emit("module:mounted", { id });
-                }
+                window.EventBus?.emit("module:mounted", { id });
             } catch (err) {
                 mod.state = "error";
-                console.error(`[ModuleLoader] Failed to mount "${id}":`, err);
+                mod.health = "degraded";
+                console.error(`[Conductor] Mounting FAILED for "${id}":`, err);
+                window.EventBus?.emit("module:error", { id, phase: "mount", error: err.message });
+            }
+        }
+    }
 
-                if (window.EventBus) {
-                    window.EventBus.emit("module:error", { id, phase: "mount", error: err.message });
+    // ── Diagnostics ──────────────────────────────────────────
+
+    function diagnose() {
+        console.group("%c ProtoAI SDOA v4 System Diagnostic ", "background: #4f8cff; color: #fff; font-weight: bold; padding: 4px; border-radius: 4px;");
+        
+        const report = [];
+        let healthyCount = 0;
+
+        _modules.forEach((mod, id) => {
+            const isHealthy = mod.state === "mounted" || (mod.state === "initialized" && mod.manifest.type === "service");
+            if (isHealthy) healthyCount++;
+            
+            report.push({
+                Module: id,
+                Layer: mod.manifest.layer,
+                State: mod.state.toUpperCase(),
+                Health: isHealthy ? "✅ OK" : "❌ " + mod.health.toUpperCase(),
+                Version: mod.manifest.version
+            });
+        });
+
+        console.table(report);
+        
+        const status = healthyCount === _modules.size ? "SYSTEM STABLE" : "SYSTEM DEGRADED";
+        const color  = healthyCount === _modules.size ? "#4caf50" : "#f97373";
+        
+        console.log(`%c ${status}: ${healthyCount}/${_modules.size} modules active `, `color: ${color}; font-weight: bold; border: 1px solid ${color}; padding: 2px;`);
+        console.groupEnd();
+        
+        return {
+            stable: healthyCount === _modules.size,
+            activeCount: healthyCount,
+            totalCount: _modules.size,
+            report
+        };
+    }
+
+    // ── Internal Helpers ─────────────────────────────────────
+
+    function _resolveDependencyOrder() {
+        const sorted   = [];
+        const visited  = new Set();
+        const visiting = new Set();
+
+        function visit(id) {
+            if (visited.has(id)) return;
+            if (visiting.has(id)) throw new Error(`Circular dependency: ${id}`);
+
+            visiting.add(id);
+            const mod = _modules.get(id);
+            if (mod) {
+                const deps = mod.manifest.requires || [];
+                for (const dep of deps) {
+                    if (_modules.has(dep)) visit(dep);
                 }
             }
+            visiting.delete(id);
+            visited.add(id);
+            if (mod) sorted.push(id);
         }
-    }
 
-    // ── getModule ────────────────────────────────────────────
-    function getModule(id) {
-        return _modules.get(id)?.instance || null;
-    }
+        // Sort primarily by layer (0 -> 3), then by internal dependencies
+        const allIds = Array.from(_modules.keys()).sort((a, b) => {
+            return (_modules.get(a).manifest.layer || 0) - (_modules.get(b).manifest.layer || 0);
+        });
 
-    // ── listAll ──────────────────────────────────────────────
-    function listAll() {
-        return [..._modules.values()].map(m => ({
-            id:    m.manifest.id,
-            type:  m.manifest.type,
-            layer: m.manifest.layer,
-            state: m.state,
-        }));
-    }
-
-    // ── collectBackendDeps ───────────────────────────────────
-    // Aggregates all backendDeps from all registered modules.
-    // Used by BackendConnector to auto-build its routing table.
-    function collectBackendDeps() {
-        const deps = [];
-        for (const [id, mod] of _modules) {
-            for (const dep of mod.manifest.backendDeps || []) {
-                deps.push({ ...dep, sourceModule: id });
-            }
+        for (const id of allIds) {
+            visit(id);
         }
-        return deps;
+
+        return sorted;
     }
 
     // ── Export ────────────────────────────────────────────────
@@ -223,9 +184,13 @@
         register,
         initAll,
         mountAll,
-        getModule,
-        listAll,
-        collectBackendDeps,
+        getModule: (id) => _modules.get(id)?.instance || null,
+        listAll: () => Array.from(_modules.values()).map(m => m.manifest),
+        diagnose
     };
 
+    // Global conductor alias
+    window.ProtoAI = { diagnose };
+
 })();
+

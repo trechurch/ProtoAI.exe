@@ -1,0 +1,174 @@
+Blended v2.1 Addition (Key Enhancements):
+Cognitive Hierarchy Update
+textWISDOM LAYER (Synthesized Intuition) ← Distilled from all memories
+          ↓
+KNOWLEDGE LAYER (Static RAG Library)
+          ↓
+ACTIVE MEMORY: Identity | Project | Workflow | Ephemeral
+New Distillation Trigger: Cross-project pattern detection (same insight appears in ≥3 projects).
+Updated Injection Priority:
+
+User Prompt
+SDOA Core Rules
+Wisdom
+Project Memory
+Workflow Memory
+Knowledge
+Identity
+Ephemeral Session
+
+Recall@K:
+Fraction of all relevant items retrieved in the top K results.
+Formula: (Relevant items found in top K) / (Total relevant items)
+
+Precision@K:
+Fraction of relevant items among the top K retrieved results.
+Formula: (Number of relevant items in top K) / K
+
+NDCG (Normalized Discounted Cumulative Gain):
+Measures ranking quality with position discounting.
+Higher relevance items should rank higher.
+Normalized against ideal ranking (0-1).
+
+DCG Calculation:
+DCG@K = Σ (rel_i / log₂(i + 1)) for i=1 to K
+
+rel_i: relevance score of item at position i
+Higher relevance at top positions weighted more.
+
+MAP (Mean Average Precision):
+Averages Average Precision across all queries.
+Emphasizes ranking quality over multiple retrievals.
+Better for overall system performance than single Precision@K.
+
+Evaluation Metrics:
+
+Precision@K
+Recall@K
+Avg Cosine Similarity
+Retrieval Latency (ms)
+Compression Ratio
+User Override Rate
+
+MAP vs Kendall's Tau:
+
+MAP: Precision-focused, rewards relevant items in top ranks across queries.
+Kendall's Tau: Pure ranking correlation (concordant/discordant pairs). Measures order agreement, ignores absolute relevance scores.
+
+MAP vs NDCG:
+
+MAP: Binary relevance, no position discount, query-averaged.
+NDCG: Graded relevance, position discounting (log), normalized to ideal.
+
+NDCG vs Precision@K:
+
+Precision@K: Fraction of relevant items in top K. Ignores order within K and graded relevance.
+NDCG: Position-discounted graded relevance. Rewards higher relevance at top ranks.
+
+NDCG better for nuanced, position-sensitive ranking  and ranking quality.
+NDCG for retrieval ranking; ROC AUC for binary detection.
+
+Added Storage: /protoai/memory/wisdom.json (global, human-audited).
+New Safety Rule: Wisdom entries require user approval before activation.
+Non-Negotiable Addition: All memory files versioned with Git-compatible diffs; user can rollback any distillation in one command.
+This merges both choices with tighter hierarchy and audit controls.
+
+Retrieval Methods Overview:
+
+Exact Match – JSON key/field lookup (fastest).
+Tag Filter – Quick tag array intersection.
+Vector Similarity – Cosine > 0.82 on embeddings.
+Hybrid – Keyword + vector rerank.
+Scope Priority – Project > Workflow > Global.
+
+Hybrid Retrieval:
+Keyword search (tags/exact) + Vector cosine similarity, then rerank results. Combines precision of exact match with semantic recall. Threshold: vector >0.82 + keyword boost.
+
+Schema Validation Methods:
+
+JSON Schema Draft 2020-12 enforcement on load/write.
+Required fields check: id, type, created_at, content.summary.
+Type-specific constraints (e.g., wisdom requires "pattern" + confidence ≥ 0.8).
+Verbatim array non-empty for distilled entries.
+Pre-write dry-run + diff preview.
+Git-style version checksum.
+
+Performance Optimization Tips:
+
+Lazy-load memory: only inject on relevance match.
+Index wisdom/knowledge with vector store (embeddings).
+Cache frequent Project + Identity in RAM (TTL 30min).
+Incremental distillation: delta-only on changes.
+JSON minification + binary format option for large files.
+Limit injection depth: max 3 memory blocks per prompt.
+
+Refined Wisdom Schema:
+
+JSON{
+  "id": "uuid-v4",
+  "type": "wisdom",
+  "source": "distilled",
+  "created_at": "ISO8601",
+  "updated_at": "ISO8601",
+  "scope": "global|project|workflow",
+  "content": {
+    "summary": "High-level insight",
+    "pattern": "Repeated success heuristic",
+    "verbatim": ["user stmt 1", "user stmt 2"],
+    "constraints": ["hard constraint"],
+    "tags": ["routing", "architecture"],
+    "confidence": 0.95
+  }
+}
+
+Expanded Wisdom Schema Fields:
+
+JSON{
+  "id": "uuid-v4 (unique identifier)",
+  "type": "wisdom (fixed)",
+  "source": "distilled (fixed for Wisdom)",
+  "created_at": "ISO8601 timestamp",
+  "updated_at": "ISO8601 timestamp (auto on edit)",
+  "scope": "global|project|workflow (applies to)",
+  "content": {
+    "summary": "Concise one-line insight (required)",
+    "pattern": "Core repeatable heuristic/rule (required)",
+    "verbatim": ["array of original user statements (required, non-empty)"],
+    "constraints": ["array of hard rules to enforce"],
+    "tags": ["array of keywords for filtering"],
+    "confidence": "float 0.0-1.0 (≥0.8 for activation)"
+  }
+}
+
+Identity Schema:
+
+JSON{
+  "id": "uuid-v4",
+  "type": "identity",
+  "source": "user|distilled",
+  "created_at": "ISO8601",
+  "updated_at": "ISO8601",
+  "content": {
+    "name": "Full name or handle",
+    "preferences": ["array of long-term prefs"],
+    "background": "Professional/personal summary",
+    "constraints": ["hard personal rules"],
+    "tags": ["array of categories"],
+    "verified": true
+  }
+}
+
+Vector Embeddings Details:
+
+JSON{
+  "embedding_model": "text-embedding-ada-002 | voyage-3 | gemini-embedding",
+  "dimension": 1536,
+  "storage": "/protoai/knowledge/vectors/",
+  "index": "hnsw | flat",
+  "metadata": ["id", "type", "tags", "scope", "last_updated"],
+  "chunk_size": 512,
+  "similarity": "cosine",
+  "refresh": "on_distillation | manual"
+}
+Rules: Embed Knowledge + Wisdom only. Project-specific indexes isolated.
+
