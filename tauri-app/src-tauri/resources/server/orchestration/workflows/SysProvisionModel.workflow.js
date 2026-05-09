@@ -81,9 +81,15 @@ class SysProvisionModelWorkflow extends WorkflowBase {
         } catch (_) {}
     }
 
+    _writeStatus(statusFile, data) {
+        if (!statusFile) return;
+        try { fs.writeFileSync(statusFile, JSON.stringify(data), "utf8"); } catch (_) {}
+    }
+
     async run(context = {}) {
-        const modelName = context.model || "Qwen/Qwen2.5-Omni-7B";
-        const cuda      = !!context.cuda;
+        const modelName  = context.model || "Qwen/Qwen2.5-Omni-7B";
+        const cuda       = !!context.cuda;
+        const statusFile = context.statusFile || null;
 
         const bootstrap = this._findBootstrap();
         if (!bootstrap) {
@@ -122,13 +128,16 @@ class SysProvisionModelWorkflow extends WorkflowBase {
 
                     if (parsed.done) {
                         this._emit("sys:provision:done", { venv: parsed.venv, model: parsed.model });
+                        this._writeStatus(statusFile, { state: "done", venv: parsed.venv, model: parsed.model, completedAt: new Date().toISOString() });
                         resolve(WorkflowResult.ok({ venv: parsed.venv, model: parsed.model }));
                     } else if (parsed.error) {
                         this._emit("sys:provision:error", { error: parsed.error });
+                        this._writeStatus(statusFile, { state: "error", error: parsed.error, completedAt: new Date().toISOString() });
                         resolve(WorkflowResult.error(parsed.error));
                     } else if (parsed.step !== undefined) {
                         lastProgress = parsed;
                         this._emit("sys:provision:progress", parsed);
+                        this._writeStatus(statusFile, { state: "running", step: parsed.step, total: parsed.total, label: parsed.label, sub: parsed.sub || null, pct: parsed.pct || 0, model: modelName });
                         const sub = parsed.sub ? ` — ${parsed.sub}` : "";
                         console.error(`[SysProvisionModel] [${parsed.step}/${parsed.total}] ${parsed.label}${sub}`);
                     }

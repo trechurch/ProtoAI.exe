@@ -1,0 +1,80 @@
+{
+  "tabs": [
+    {
+      "id": "apiKeys",
+      "label": "API Keys",
+      "icon": "🔑",
+      "fields": [
+        { "id": "apiKey-anthropic", "type": "password", "label": "Anthropic", "placeholder": "sk-ant-...", "action": { "label": "Test", "id": "test-anthropic" } },
+        { "id": "apiKey-openai", "type": "password", "label": "OpenAI", "placeholder": "sk-...", "action": { "label": "Test", "id": "test-openai" } },
+        { "id": "apiKey-openrouter", "type": "password", "label": "OpenRouter", "placeholder": "sk-or-...", "action": { "label": "Test", "id": "test-openrouter" } }
+      ]
+    },
+    {
+      "id": "models",
+      "label": "Models",
+      "icon": "🤖",
+      "fields": [
+        { "type": "heading", "label": "Model Configuration" },
+        { "id": "defaultModel", "type": "select", "label": "Default Model", "options": [] },
+        { "id": "codingModel", "type": "select", "label": "Coding Model", "options": [] },
+        { "type": "separator" },
+        { "id": "modelImportList", "type": "textarea", "label": "Import Model List (Comma-separated)", "rows": 4 }
+      ]
+    },
+    {
+      "id": "routing",
+      "label": "Routing",
+      "icon": "🔀",
+      "fields": [
+        { "id": "routingMode", "type": "select", "label": "Routing Mode", "options": [
+          { "value": "single", "label": "Single — Direct Chat" },
+          { "value": "multi", "label": "Multi — Orchestrated Pipeline" }
+        ], "hint": "Single: Direct to prime model. Multi: Orchestrated through local GGUF." }
+      ]
+    },
+    {
+      "id": "ingestion",
+      "label": "Ingestion",
+      "icon": "📂",
+      "fields": [
+        { "id": "maxDepth", "type": "number", "label": "Max Folder Depth", "min": 1, "max": 10 },
+        { "id": "maxFileSizeMB", "type": "number", "label": "Max File Size (MB)", "min": 1, "max": 100 }
+      ]
+    },
+    {
+      "id": "backend",
+      "label": "Backend",
+      "icon": "⚙️",
+      "fields": [
+        { "id": "timeoutMs", "type": "number", "label": "Request Timeout (ms)", "min": 5000, "max": 120000 },
+        { "id": "retryCount", "type": "number", "label": "Retry Count", "min": 0, "max": 10 }
+      ]
+    },
+    {
+      "id": "profiles",
+      "label": "Profiles",
+      "icon": "🎭",
+      "fields": [
+        { "id": "profileManager", "type": "custom-profile-manager", "label": "Custom Profiles" }
+      ]
+    },
+    {
+      "id": "spellcheck",
+      "label": "Spellcheck",
+      "icon": "✓",
+      "fields": [
+        { "id": "spellcheckEnabled", "type": "toggle", "label": "Enable Automatic Spellcheck" },
+        { "id": "spellcheckModel", "type": "select", "label": "Spellcheck Model", "options": [] }
+      ]
+    },
+    {
+      "id": "localAi",
+      "label": "Local AI",
+      "icon": "🧠",
+      "fields": [
+        { "id": "localAiSetup", "type": "custom-local-ai-setup", "label": "Local AI Setup" }
+      ]
+    }
+  ]
+}

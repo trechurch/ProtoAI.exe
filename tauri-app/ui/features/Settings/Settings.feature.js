@@ -71,6 +71,14 @@
 
                 // Handle custom field types
                 for (const field of tabData.fields) {
+                    if (field.type === "custom-local-ai-setup") {
+                        const fieldEl = form._sdoaGetField(field.id);
+                        if (fieldEl) {
+                            fieldEl.innerHTML = "";
+                            _renderLocalAiSetup(fieldEl);
+                        }
+                    }
+
                     if (field.type === "custom-profile-manager") {
                         const fieldEl = form._sdoaGetField(field.id);
                         if (fieldEl) {
@@ -116,6 +124,232 @@
         _modal._sdoaFooter.appendChild(saveBtn);
 
         window.ModalPrim.open(_modal);
+    }
+
+    /**
+     * Renders the Local AI setup panel — status badge, progress display,
+     * setup button, and CUDA toggle. Polls /local_ai_status every 2s while
+     * a provision is running so the UI stays live without a page reload.
+     */
+    function _renderLocalAiSetup(container) {
+        let _pollTimer   = null;
+        let _useCuda     = false;
+
+        const panel = document.createElement("div");
+        panel.className = "sdoa-local-ai-panel";
+        panel.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:16px;">
+
+                <!-- Status card -->
+                <div id="lai-status-card" style="
+                    padding:16px; border-radius:8px;
+                    background:rgba(0,0,0,0.25);
+                    border:1px solid var(--border-subtle);
+                    display:flex; align-items:center; gap:12px;">
+                    <div id="lai-badge" style="
+                        width:12px; height:12px; border-radius:50%;
+                        background:var(--text-dim); flex-shrink:0;"></div>
+                    <div style="flex:1;">
+                        <div id="lai-status-label" style="font-weight:600; font-size:13px;">Checking status…</div>
+                        <div id="lai-status-sub"   style="font-size:12px; color:var(--text-dim); margin-top:2px;"></div>
+                    </div>
+                    <div id="lai-model-tag" style="
+                        font-size:11px; padding:2px 8px; border-radius:12px;
+                        background:rgba(255,255,255,0.07); color:var(--text-dim);
+                        display:none;">Qwen2.5-Omni-7B</div>
+                </div>
+
+                <!-- Progress (hidden until setup running) -->
+                <div id="lai-progress-section" style="display:none; flex-direction:column; gap:8px;">
+                    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-dim);">
+                        <span id="lai-progress-label">Preparing…</span>
+                        <span id="lai-progress-step"></span>
+                    </div>
+                    <div style="height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden;">
+                        <div id="lai-progress-bar" style="
+                            height:100%; width:0%; border-radius:3px;
+                            background:var(--accent);
+                            transition:width 0.4s ease;"></div>
+                    </div>
+                    <div id="lai-progress-sub" style="font-size:11px; color:var(--text-dim); font-family:monospace; word-break:break-all; max-height:60px; overflow:hidden;"></div>
+                </div>
+
+                <!-- Controls -->
+                <div id="lai-controls" style="display:flex; flex-direction:column; gap:10px;">
+                    <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+                        <input type="checkbox" id="lai-cuda-toggle" style="cursor:pointer;" />
+                        Use CUDA (GPU acceleration — requires NVIDIA GPU + CUDA 12.1)
+                    </label>
+                    <div style="display:flex; gap:8px;">
+                        <button id="lai-setup-btn" class="sdoa-button sdoa-button--primary sdoa-button--sm" style="display:none;">
+                            ⬇ Setup Local AI
+                        </button>
+                        <button id="lai-test-btn" class="sdoa-button sdoa-button--secondary sdoa-button--sm" style="display:none;">
+                            ✓ Test Connection
+                        </button>
+                    </div>
+                    <p style="font-size:11px; color:var(--text-dim); margin:0;">
+                        First-time setup downloads ~4 GB of Python packages and ~15 GB of model weights from HuggingFace.
+                        Your internet connection and disk space should be sufficient before proceeding.
+                    </p>
+                </div>
+
+            </div>
+        `;
+
+        container.appendChild(panel);
+
+        // ── Element refs ──────────────────────────────────────
+        const badge         = panel.querySelector("#lai-badge");
+        const statusLabel   = panel.querySelector("#lai-status-label");
+        const statusSub     = panel.querySelector("#lai-status-sub");
+        const modelTag      = panel.querySelector("#lai-model-tag");
+        const progressSec   = panel.querySelector("#lai-progress-section");
+        const progressLabel = panel.querySelector("#lai-progress-label");
+        const progressStep  = panel.querySelector("#lai-progress-step");
+        const progressBar   = panel.querySelector("#lai-progress-bar");
+        const progressSub   = panel.querySelector("#lai-progress-sub");
+        const cudaToggle    = panel.querySelector("#lai-cuda-toggle");
+        const setupBtn      = panel.querySelector("#lai-setup-btn");
+        const testBtn       = panel.querySelector("#lai-test-btn");
+
+        // ── Helpers ───────────────────────────────────────────
+        const setBadge = (color) => badge.style.background = color;
+        const COLORS   = { idle: "var(--text-dim)", running: "#f59e0b", done: "#22c55e", error: "#ef4444" };
+
+        function _applyStatus(s) {
+            if (!s) return;
+            setBadge(COLORS[s.state] || COLORS.idle);
+
+            if (s.state === "idle") {
+                statusLabel.textContent = "Not installed";
+                statusSub.textContent   = "Run Setup Local AI to install Qwen2.5-Omni-7B.";
+                setupBtn.style.display  = "inline-flex";
+                testBtn.style.display   = "none";
+                progressSec.style.display = "none";
+                modelTag.style.display    = "none";
+
+            } else if (s.state === "running") {
+                statusLabel.textContent   = "Installing…";
+                statusSub.textContent     = "";
+                setupBtn.style.display    = "none";
+                testBtn.style.display     = "none";
+                progressSec.style.display = "flex";
+                modelTag.style.display    = "none";
+                if (s.label) progressLabel.textContent = s.label;
+                if (s.step)  progressStep.textContent  = `Step ${s.step} of ${s.total || 5}`;
+                if (s.sub)   progressSub.textContent   = s.sub;
+                const pct = Math.max(((s.step - 1) / (s.total || 5)) * 100, s.pct || 0);
+                progressBar.style.width = pct + "%";
+                _startPolling();
+
+            } else if (s.state === "done") {
+                statusLabel.textContent   = "Ready";
+                statusSub.textContent     = `Model: ${s.model || "Qwen2.5-Omni-7B"}`;
+                setupBtn.style.display    = "none";
+                testBtn.style.display     = "inline-flex";
+                progressSec.style.display = "none";
+                modelTag.style.display    = "inline-block";
+                progressBar.style.width   = "100%";
+                setBadge(COLORS.done);
+                _stopPolling();
+
+            } else if (s.state === "error") {
+                statusLabel.textContent   = "Setup failed";
+                statusSub.textContent     = s.error || "Unknown error.";
+                setupBtn.style.display    = "inline-flex";
+                testBtn.style.display     = "none";
+                progressSec.style.display = "none";
+                modelTag.style.display    = "none";
+                _stopPolling();
+            }
+        }
+
+        // ── Polling ───────────────────────────────────────────
+        function _startPolling() {
+            if (_pollTimer) return;
+            _pollTimer = setInterval(_pollStatus, 2000);
+        }
+        function _stopPolling() {
+            clearInterval(_pollTimer);
+            _pollTimer = null;
+        }
+        async function _pollStatus() {
+            try {
+                const res = await window.backendConnector?.runWorkflow("local_ai_status", {});
+                _applyStatus(res?.data || res);
+            } catch (_) {}
+        }
+
+        // ── Buttons ───────────────────────────────────────────
+        cudaToggle.addEventListener("change", () => { _useCuda = cudaToggle.checked; });
+
+        setupBtn.addEventListener("click", async () => {
+            setupBtn.disabled = true;
+            setupBtn.textContent = "Starting…";
+            try {
+                const res = await window.backendConnector?.runWorkflow("provision", {
+                    model: "Qwen/Qwen2.5-Omni-7B",
+                    cuda:  _useCuda,
+                });
+                if (res?.started === false) {
+                    window.ToastPrim?.show(res.reason || "Could not start setup.", "error");
+                    setupBtn.disabled = false;
+                    setupBtn.textContent = "⬇ Setup Local AI";
+                } else {
+                    _applyStatus({ state: "running", step: 1, total: 5, label: "Starting setup…" });
+                    _startPolling();
+                }
+            } catch (err) {
+                window.ToastPrim?.show("Setup failed to start: " + err.message, "error");
+                setupBtn.disabled = false;
+                setupBtn.textContent = "⬇ Setup Local AI";
+            }
+        });
+
+        testBtn.addEventListener("click", async () => {
+            testBtn.disabled = true;
+            testBtn.textContent = "Testing…";
+            try {
+                const res = await window.backendConnector?.runWorkflow("local_ai_health", {});
+                const health = res?.data || res;
+                if (health?.ok && health?.ready) {
+                    window.ToastPrim?.show(`Local AI is healthy on ${health.device || "CPU"}.`, "success");
+                } else if (health?.ok && !health?.ready) {
+                    window.ToastPrim?.show("Server is up but model is still loading — try again shortly.", "info");
+                } else {
+                    window.ToastPrim?.show("Server not responding. Launch ProtoAI to start it.", "error");
+                }
+            } catch (err) {
+                window.ToastPrim?.show("Health check failed: " + err.message, "error");
+            } finally {
+                testBtn.disabled = false;
+                testBtn.textContent = "✓ Test Connection";
+            }
+        });
+
+        // ── Initial status check ──────────────────────────────
+        (async () => {
+            try {
+                // Check provision status first
+                const statusRes = await window.backendConnector?.runWorkflow("local_ai_status", {});
+                const status    = statusRes?.data || statusRes;
+                if (status?.state && status.state !== "idle") {
+                    _applyStatus(status);
+                    return;
+                }
+                // Then check if server is already live
+                const healthRes = await window.backendConnector?.runWorkflow("local_ai_health", {});
+                const health    = healthRes?.data || healthRes;
+                if (health?.ok) {
+                    _applyStatus({ state: "done", model: health.model || "Qwen2.5-Omni-7B" });
+                } else {
+                    _applyStatus({ state: "idle" });
+                }
+            } catch (_) {
+                _applyStatus({ state: "idle" });
+            }
+        })();
     }
 
     /**

@@ -19,7 +19,11 @@ class Router {
             "list_files", "search_history", "list_processes",
             "vfs_list", "vfs_manifest", "vfs_permissions",
             "qmd_search", "qmd_index",
+            "local_ai_status", "local_ai_health",
         ]);
+
+        // Track whether a provision is currently running (fire-and-forget)
+        this._provisionRunning = false;
     }
 
     startListening() {
@@ -144,6 +148,17 @@ class Router {
                     result = await this._handleMultiModelSendIPC(payload, id);
                     break;
 
+                // ── Local AI provision ────────────────────────────────────
+                case "provision":
+                    result = this._handleProvisionStart(payload);
+                    break;
+                case "local_ai_status":
+                    result = this._handleLocalAiStatus();
+                    break;
+                case "local_ai_health":
+                    result = await this._handleLocalAiHealth();
+                    break;
+
                 // ── Workflow Delegations ──────────────────────────────────
                 case "image_gen":
                     if (!payload?.text) return { ok: false, error: "Missing 'text'" };
@@ -231,8 +246,92 @@ class Router {
         return r;
     }
 
+    // ── Local AI Handlers ─────────────────────────────────────────────────────
+
+    _statusFilePath() {
+        const os   = require("os");
+        const path = require("path");
+        const appdata = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
+        return path.join(appdata, "protoai", "provision_status.json");
+    }
+
+    _handleProvisionStart(payload = {}) {
+        if (this._provisionRunning) {
+            return { started: false, reason: "Provision already in progress" };
+        }
+
+        const statusFile = this._statusFilePath();
+        const fs   = require("fs");
+        const path = require("path");
+        const os   = require("os");
+
+        // Write initial status
+        const appdata = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
+        fs.mkdirSync(path.join(appdata, "protoai"), { recursive: true });
+        fs.writeFileSync(statusFile, JSON.stringify({
+            state: "running", step: 0, total: 5,
+            label: "Starting setup…", pct: 0,
+            model: payload.model || "Qwen/Qwen2.5-Omni-7B",
+            startedAt: new Date().toISOString(), completedAt: null, error: null
+        }), "utf8");
+
+        this._provisionRunning = true;
+
+        const wf = this.registry.get("SysProvisionModel.workflow");
+        if (!wf) {
+            fs.writeFileSync(statusFile, JSON.stringify({ state: "error", error: "SysProvisionModel.workflow not registered" }), "utf8");
+            this._provisionRunning = false;
+            return { started: false, reason: "Workflow not available" };
+        }
+
+        // Fire and forget — runs concurrently with normal request queue
+        wf.run({ model: payload.model, cuda: !!payload.cuda, statusFile })
+            .then((res) => {
+                const final = res?.status === "ok"
+                    ? { state: "done", venv: res.data?.venv, model: res.data?.model, completedAt: new Date().toISOString(), error: null }
+                    : { state: "error", error: res?.error || "Unknown error", completedAt: new Date().toISOString() };
+                try { fs.writeFileSync(statusFile, JSON.stringify(final), "utf8"); } catch (_) {}
+            })
+            .catch((err) => {
+                try { fs.writeFileSync(statusFile, JSON.stringify({ state: "error", error: err.message, completedAt: new Date().toISOString() }), "utf8"); } catch (_) {}
+            })
+            .finally(() => { this._provisionRunning = false; });
+
+        return { started: true, statusFile };
+    }
+
+    _handleLocalAiStatus() {
+        const fs = require("fs");
+        const statusFile = this._statusFilePath();
+        try {
+            if (!fs.existsSync(statusFile)) return { state: "idle" };
+            return JSON.parse(fs.readFileSync(statusFile, "utf8"));
+        } catch (_) {
+            return { state: "idle" };
+        }
+    }
+
+    async _handleLocalAiHealth() {
+        return new Promise((resolve) => {
+            const http = require("http");
+            const req  = http.get(
+                { hostname: "127.0.0.1", port: 17892, path: "/health", timeout: 2000 },
+                (res) => {
+                    let body = "";
+                    res.on("data", d => body += d);
+                    res.on("end", () => {
+                        try { resolve({ ok: true, ...JSON.parse(body) }); }
+                        catch (_) { resolve({ ok: false, reason: "Invalid response" }); }
+                    });
+                }
+            );
+            req.on("error", () => resolve({ ok: false, reason: "Server not running" }));
+            req.on("timeout", () => { req.destroy(); resolve({ ok: false, reason: "Timeout" }); });
+        });
+    }
+
     // ── Legacy Handlers ──────────────────────────────────────────────────────
-    
+
     _handleUploadIPC(payload) {
         const { project, filename, content, encoding } = payload || {};
         if (!project) return { ok: false, error: "Missing 'project'" };
