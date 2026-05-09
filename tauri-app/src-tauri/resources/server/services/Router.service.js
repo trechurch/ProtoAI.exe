@@ -13,9 +13,9 @@ class Router {
         this._processing = false;
         this._queue = [];
 
-        // Express lane: Fast read-only message types that never block
+        // Express lane: Fast read-only message types that never block the queue.
         this._EXPRESS_TYPES = new Set([
-            "projects", "history", "profiles", "settings",
+            "engine_status", "system_health", "projects", "history", "profiles", "settings",
             "list_files", "search_history", "list_processes",
             "vfs_list", "vfs_manifest", "vfs_permissions",
             "qmd_search", "qmd_index",
@@ -110,6 +110,13 @@ class Router {
 
         try {
             switch (type) {
+                case "engine_ipc":
+                    if (!payload?.msgType) return { ok: false, error: "Missing 'msgType' in engine_ipc wrapper" };
+                    // Re-dispatch with the unwrapped message
+                    const unwrapped = await this.dispatchMessage({ id, type: payload.msgType, payload: payload.payload });
+                    // Return the inner result directly to avoid double-wrapping
+                    return unwrapped;
+
                 // ── Legacy inline handlers ─────────────────────────────────
                 case "projects":
                     result = { projects: this.deps.projectRepo.listProjects() || [] };
@@ -147,10 +154,10 @@ class Router {
                     result = await this._runWorkflow("DeepSearch.workflow", { query: payload.query });
                     break;
                 case "qmd_index":
-                    result = await this._runQmdIndexIPC(payload);
+                    result = await this._handleQmdIndexIPC(payload);
                     break;
                 case "qmd_search":
-                    result = await this._runQmdSearchIPC(payload);
+                    result = await this._handleQmdSearchIPC(payload);
                     break;
                 case "vfs_add":
                     result = await this._runWorkflow("VfsAdd.workflow", payload, true);

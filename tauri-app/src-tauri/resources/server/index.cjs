@@ -14,6 +14,7 @@ const path = require("path");
 const Middleware = require("./services/Middleware.service");
 const Router = require("./services/Router.service");
 const AuthListener = require("./services/AuthListener.service");
+const LocalModelAdapter = require("./access/llm/LocalModelAdapter"); // Force load early to prevent circular deps
 
 AuthListener.start();
 
@@ -44,7 +45,10 @@ function _safeRequire(mod, label) {
 }
 
 function _safeRegister(label, fn) {
-    try { fn(); }
+    try { 
+        fn(); 
+        Middleware.log(`[boot] Registered workflow: ${label}`);
+    }
     catch (err) { Middleware.log("[boot] Optional workflow unavailable: " + label + " — " + err.message); }
 }
 
@@ -120,11 +124,15 @@ const GetPolicyWorkflow          = _safeRequire("./orchestration/workflows/GetPo
 const UpdatePolicyWorkflow       = _safeRequire("./orchestration/workflows/UpdatePolicy.workflow",       "UpdatePolicyWorkflow");
 const PartnerCommentaryWorkflow  = _safeRequire("./orchestration/workflows/PartnerCommentary.workflow",  "PartnerCommentaryWorkflow");
 const SysProvisionModelWorkflow = _safeRequire("./orchestration/workflows/SysProvisionModel.workflow", "SysProvisionModelWorkflow");
+const MemoryDistillationWorkflow = _safeRequire("./orchestration/workflows/MemoryDistillation.workflow", "MemoryDistillationWorkflow");
+const EngineerWorkflow           = _safeRequire("./orchestration/workflows/Engineer.workflow",           "EngineerWorkflow");
 
 _safeRegister("CreateProject.workflow",      () => { if (CreateProjectWorkflow)      registry.register("CreateProject.workflow",      new CreateProjectWorkflow(FsProjectRepository)); });
 _safeRegister("MultiModelSend.workflow",     () => { if (MultiModelSendWorkflow)     registry.register("MultiModelSend.workflow",     new MultiModelSendWorkflow()); });
 _safeRegister("PartnerCommentary.workflow",  () => { if (PartnerCommentaryWorkflow)  registry.register("PartnerCommentary.workflow",  new PartnerCommentaryWorkflow()); });
 _safeRegister("SysProvisionModel.workflow",  () => { if (SysProvisionModelWorkflow)  registry.register("SysProvisionModel.workflow",  new SysProvisionModelWorkflow()); });
+_safeRegister("MemoryDistillation.workflow", () => { if (MemoryDistillationWorkflow) registry.register("MemoryDistillation.workflow", new MemoryDistillationWorkflow()); });
+_safeRegister("Engineer.workflow",           () => { if (EngineerWorkflow)           registry.register("Engineer.workflow",           new EngineerWorkflow()); });
 _safeRegister("VfsAdd.workflow",             () => { if (VfsAddWorkflow)             registry.register("VfsAdd.workflow",             new VfsAddWorkflow()); });
 _safeRegister("VfsList.workflow",            () => { if (VfsListWorkflow)            registry.register("VfsList.workflow",            new VfsListWorkflow()); });
 _safeRegister("VfsManifest.workflow",        () => { if (VfsManifestWorkflow)        registry.register("VfsManifest.workflow",        new VfsManifestWorkflow()); });

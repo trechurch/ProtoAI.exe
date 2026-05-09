@@ -20,6 +20,10 @@ aside {
 .sidebar-scroll-area { flex: 0 1 auto; overflow-y: auto; overflow-x: hidden; }
 #sidebar-right { border-left: 1px solid var(--border-subtle); }
 
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing * { pointer-events: none; }
+body.resizing .resizer { pointer-events: all; }
+
 .resizer {
   position: absolute;
   top: 0;
@@ -32,6 +36,8 @@ aside {
 }
 
 .resizer:hover { background: var(--accent); opacity: 0.3; }
+.resizer-left { right: -3px; }
+.resizer-right { left: -3px; }
 
 .sidebar-header {
   display: flex;

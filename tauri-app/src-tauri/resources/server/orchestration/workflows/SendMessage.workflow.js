@@ -113,10 +113,7 @@ class SendMessageWorkflow {
         }
       });
     } catch (err) {
-      return new WorkflowResult("error", {
-        error: "CLI error or timeout",
-        detail: String(err)
-      });
+      return new WorkflowResult("error", null, "CLI error or timeout: " + String(err));
     } finally {
       try { fs.unlinkSync(tmpFile); } catch (_) {}
     }
@@ -127,10 +124,7 @@ class SendMessageWorkflow {
     }
 
     if (!reply) {
-      return new WorkflowResult("error", {
-        error: "Empty response from LLM",
-        detail: "CLI returned no stdout output. Check: (1) API key in settings, (2) model exists in profile config, (3) OpenRouter connectivity"
-      });
+      return new WorkflowResult("error", null, "Empty response from LLM. CLI returned no stdout output. Check: (1) API key in settings, (2) model exists in profile config, (3) OpenRouter connectivity");
     }
 
     return new WorkflowResult("ok", {

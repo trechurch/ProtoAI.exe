@@ -1,28 +1,42 @@
-// ============================================================
-// BackendConnector.ui.js — UI Adapter (Browser-Safe)
-// version: 3.2.3
-// Last modified: 2026-05-04 03:11 UTC
-// depends: tauri-utils.js (must load first)
-// ============================================================
+/* ============================================================
+   BackendConnector.ui.js — UI Adapter (Browser-Safe)
+   version: 4.0.0 (SDOA v4)
+   Last modified: 2026-05-09 03:59 UTC
+   ============================================================ */
 
 (function () {
     "use strict";
+
+    const { domReady } = window.TauriUtils;
+
+    const MANIFEST = {
+        id:      "BackendConnector.ui",
+        type:    "adapter",
+        layer:   2,
+        runtime: "Browser",
+        version: "4.0.0",
+        requires: ["tauri-utils.js"],
+        docs: {
+            description: "Primary bridge between the UI and the Rust sidecar. Handles IPC routing, status polling, and auto-reconnection.",
+            author: "ProtoAI Team"
+        }
+    };
 
     class BackendConnector {
 
         constructor() {
             this.status          = "connecting";
             this.listeners       = [];
+            this.isReconnecting  = false;
+            
             // Safe check for Tauri core
             this.TAURI_AVAILABLE = !!(window.__TAURI__?.core?.invoke);
 
-            console.log(`[BackendConnector.ui] Tauri IPC: ${this.TAURI_AVAILABLE ? "available" : "unavailable"}`);
+            console.log(`[BackendConnector.ui] v4.0.0 | Tauri IPC: ${this.TAURI_AVAILABLE ? "CONNECTED" : "OFFLINE"}`);
             
-            // Wait for DOM to ensure status elements are available before first update
-            if (window.TauriUtils?.domReady) {
-                window.TauriUtils.domReady(() => this._init());
+            if (domReady) {
+                domReady(() => this._init());
             } else {
-                // Fallback if TauriUtils missing or not yet loaded
                 document.addEventListener("DOMContentLoaded", () => this._init());
             }
         }
@@ -53,18 +67,18 @@
             this.status = mode;
 
             const labels      = { 
-                tauri: "Backend: Tauri IPC (sidecar active)", 
-                initializing: "Backend: sidecar starting...",
-                crashed: "Sidecar crashed. Click to reconnect.", 
-                unavailable: "Backend: initializing...", 
-                offline: "Backend: offline — click to reconnect" 
+                tauri:        "Engine Online", 
+                initializing: "Waking Sidecar...",
+                crashed:      "Engine Halted (Click to Reboot)", 
+                unavailable:  "Bridge Offline", 
+                offline:      "Offline" 
             };
             const shortLabels = { 
-                tauri: "Tauri IPC", 
+                tauri:        "Online", 
                 initializing: "Starting...", 
-                crashed: "Crashed", 
-                unavailable: "Starting...", 
-                offline: "Offline" 
+                crashed:      "Halted", 
+                unavailable:  "Disconnected", 
+                offline:      "Offline" 
             };
 
             const text      = labels[mode]      ?? mode;
@@ -80,36 +94,41 @@
             const reconnectable = (mode === "offline" || mode === "crashed" || mode === "unavailable");
             if (row) {
                 row.classList.toggle("status-row--reconnectable", reconnectable);
-                if (reconnectable) {
-                    if (!row._reconnectHandler) {
-                        row._reconnectHandler = async () => {
-                            if (this.isReconnecting) return;
-                            this.isReconnecting = true;
-                            
-                            if (label) label.textContent = "Reconnecting...";
-                            row.classList.add("status-row--busy");
-                            
-                            try {
-                                await Promise.race([
-                                    window.__TAURI__.core.invoke("engine_reconnect"),
-                                    new Promise((_, reject) => setTimeout(() => reject(new Error("Reconnect timed out")), 10000))
-                                ]);
-                                this.setBackendStatus("tauri");
-                                this.emit("backendRecovered", {});
-                            } catch (err) {
-                                this.setBackendStatus("offline", err.message || "Failed");
-                                console.error("[BackendConnector.ui] Reconnect failed:", err);
-                            } finally {
-                                this.isReconnecting = false;
-                                row.classList.remove("status-row--busy");
-                            }
-                        };
-                        row.addEventListener("click", row._reconnectHandler);
-                    }
+                if (reconnectable && !row._reconnectHandler) {
+                    row._reconnectHandler = () => this.reconnect();
+                    row.addEventListener("click", row._reconnectHandler);
                 }
             }
 
             this.emit("statusChanged", { mode, detail });
+        }
+
+        async reconnect() {
+            if (this.isReconnecting) return;
+            this.isReconnecting = true;
+            
+            const label = document.getElementById("sidebarStatusText");
+            const row   = document.getElementById("statusRow");
+            
+            if (label) label.textContent = "Rebooting Engine...";
+            if (row)   row.classList.add("status-row--busy");
+            
+            try {
+                await Promise.race([
+                    window.__TAURI__.core.invoke("engine_reconnect"),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout during reboot")), 15000))
+                ]);
+                this.setBackendStatus("tauri");
+                this.emit("backendRecovered", {});
+                window.ToastPrim?.show("Sidecar engine rebooted successfully.", "success");
+            } catch (err) {
+                this.setBackendStatus("offline", "Reboot Failed");
+                console.error("[BackendConnector.ui] Reconnect failed:", err);
+                window.ToastPrim?.show("Engine reboot failed: " + err.message, "error");
+            } finally {
+                this.isReconnecting = false;
+                if (row) row.classList.remove("status-row--busy");
+            }
         }
 
         async getBackendStatus() {
@@ -122,6 +141,7 @@
             if (!this.TAURI_AVAILABLE) { this.setBackendStatus("offline"); return; }
             
             const poll = async () => {
+                if (this.isReconnecting) return;
                 try {
                     const status = await this.getBackendStatus();
                     if (status === "ready") {
@@ -140,164 +160,90 @@
             if (this.pollInterval) clearInterval(this.pollInterval);
             this.pollInterval = setInterval(() => {
                 if (this.status !== "tauri") poll();
-            }, 5000);
+            }, 10000); // 10s polling for health
         }
 
         async invokeTauri(workflow, payload) {
             const inv = window.__TAURI__.core.invoke.bind(window.__TAURI__.core);
 
-            switch (workflow) {
-                case "get_status":        return inv("get_status");
-                case "get_launch_flags":  return inv("get_launch_flags");
-                case "engine_status":     return inv("engine_status");
+            // Standard SDOA v4 IPC Mapping
+            const mapping = {
+                "get_status":           "get_status",
+                "get_launch_flags":     "get_launch_flags",
+                "engine_status":        "engine_status",
+                "projects":             "projects",
+                "history":              "history",
+                "profiles":             "profiles",
+                "chat":                 "chat",
+                "multi_model_send":     "multi_model_send",
+                "upload":               "upload",
+                "ingest":               "ingest",
+                "image_gen":            "image_gen",
+                "deep_search":          "deep_search",
+                "qmd_search":           "qmd_search",
+                "qmd_index":            "qmd_index",
+                "settings_get":         "settings_get",
+                "settings_set":         "settings_set",
+                "vfs_add":              "vfs_add",
+                "vfs_list":             "vfs_list",
+                "vfs_manifest":         "vfs_manifest",
+                "vfs_remove":           "vfs_remove",
+                "vfs_permissions":      "vfs_permissions",
+                "auto_optimize":        "auto_optimize",
+                "google_drive":         "google_drive",
+                "get_project_dir":      "get_project_dir",
+                "fs_read_file":         "fs_read_file",
+                "fs_write_file":        "fs_write_file",
+                "fs_list_dir":          "fs_list_dir",
+                "restart_engine":       "engine_reconnect"
+            };
 
-                case "ListProjectsWorkflow":
-                case "projects":
-                    return inv("engine_ipc", { msgType: "projects", payload });
+            const msgType = mapping[workflow] || workflow;
 
-                case "LoadProjectHistoryWorkflow":
-                case "history":
-                    return inv("engine_ipc", { msgType: "history", payload });
+            // Workflows that map to native Tauri commands (non-sidecar)
+            const nativeCommands = ["get_status", "get_launch_flags", "engine_status", "settings_get", "settings_set", "engine_reconnect", "get_project_dir", "fs_read_file", "fs_write_file", "fs_list_dir"];
 
-                case "ListProfilesWorkflow":
-                case "profiles":
-                    return inv("engine_ipc", { msgType: "profiles", payload });
-
-                case "SendMessageWorkflow":
-                case "engine_chat":
-                    return inv("engine_ipc", { msgType: "chat", payload });
-
-                case "MultiModelSendWorkflow":
-                case "engine_multi_chat":
-                    return inv("engine_ipc", { msgType: "multi_model_send", payload });
-
-                case "SendMessageStreamWorkflow":
-                case "engine_chat_stream":
-                    return inv("engine_ipc", { msgType: "chat", payload: { ...payload, stream: true } });
-
-                case "UploadWorkflow":
-                case "engine_upload":
-                case "upload":
-                    return inv("engine_ipc", { msgType: "upload", payload });
-
-                case "IngestWorkflow":
-                case "engine_ingest":
-                case "ingest":
-                    return inv("engine_ipc", { msgType: "ingest", payload });
-
-                case "ImageGenWorkflow":
-                case "engine_image_gen":
-                    return inv("engine_ipc", { msgType: "image_gen", payload });
-
-                case "DeepSearchWorkflow":
-                case "engine_deep_search":
-                    return inv("engine_ipc", { msgType: "deep_search", payload });
-
-                case "qmd_search":
-                case "engine_qmd_search":
-                    return inv("engine_ipc", { msgType: "qmd_search", payload });
-
-                case "qmd_index":
-                case "engine_qmd_index":
-                    return inv("engine_ipc", { msgType: "qmd_index", payload });
-
-                case "get_settings":
-                case "settings_get":
-                    return inv("settings_get");
-
-                case "update_settings":
-                case "settings_set":
-                    return inv("settings_set", { key: payload?.key || "", value: payload?.value ?? payload });
-
-                case "settings_test_key":
-                    return inv("settings_test_key", { provider: payload?.provider || "", key: payload?.key || "" });
-
-                case "get_policy":
-                    return inv("settings_get"); 
-
-                case "update_policy":
-                    return inv("settings_set", { key: "policy", value: payload });
-
-                case "get_model_inventory":
-                case "save_model_inventory":
-                    return null;
-
-                case "vfs_add":
-                case "VfsAddWorkflow":
-                    return inv("engine_ipc", { msgType: "vfs_add", payload });
-
-                case "vfs_list":
-                case "VfsListWorkflow":
-                    return inv("engine_ipc", { msgType: "vfs_list", payload });
-                
-                case "vfs_manifest":
-                case "VfsManifestWorkflow":
-                    return inv("engine_ipc", { msgType: "vfs_manifest", payload });
-
-                case "vfs_remove":
-                case "VfsRemoveWorkflow":
-                    return inv("engine_ipc", { msgType: "vfs_remove", payload });
-
-                case "vfs_permissions":
-                case "VfsUpdatePermissionsWorkflow":
-                    return inv("engine_ipc", { msgType: "vfs_permissions", payload });
-
-                case "auto_optimize":
-                case "AutoOptimizeModelsWorkflow":
-                    return inv("engine_ipc", { msgType: "auto_optimize", payload });
-
-                case "google_drive":
-                case "GoogleDriveWorkflow":
-                    return inv("engine_ipc", { msgType: "google_drive", payload });
-
-                case "get_project_dir":
-                    return inv("get_project_dir", { project: payload?.project || "" });
-                case "fs_read_file":
-                    return inv("fs_read_file", { path: payload?.path || "" });
-                case "fs_write_file":
-                    return inv("fs_write_file", { path: payload?.path || "", content: payload?.content || "" });
-                case "fs_list_dir":
-                    return inv("fs_list_dir", { path: payload?.path || "" });
-
-                default:
-                    console.warn(`[BackendConnector.ui] Routing unknown workflow "${workflow}" through engine_ipc`);
-                    return inv("engine_ipc", { msgType: workflow, payload });
+            if (nativeCommands.includes(msgType)) {
+                return inv(msgType, payload);
             }
+
+            // Standard Sidecar IPC routing
+            return inv("engine_ipc", { msgType, payload });
         }
 
         async runWorkflow(name, payload = {}) {
-            console.log(`[BackendConnector] Running workflow: ${name}`, payload);
-            if (!this.TAURI_AVAILABLE) throw new Error("Tauri IPC not available");
+            console.log(`[BackendConnector] EXEC: ${name}`, payload);
+            if (!this.TAURI_AVAILABLE) throw new Error("Tauri IPC bridge not available");
+            
             try {
                 const result = await this.invokeTauri(name, payload);
-                console.log(`[BackendConnector] Workflow ${name} result:`, result);
+                console.log(`[BackendConnector] DONE: ${name} ->`, result);
+                
+                // If we got a result, the sidecar is alive
                 if (this.status !== "tauri") this.setBackendStatus("tauri");
+                
                 return result;
             } catch (err) {
-                console.error(`[BackendConnector] Workflow "${name}" failed:`, err);
+                console.error(`[BackendConnector] FAIL: "${name}" ->`, err);
                 
-                // Auto-recovery: If the bridge is down, try to restart it once.
+                // Detection of Bridge collapse
                 if (err && String(err).includes("Engine bridge not initialized") && !payload?._isRetry) {
-                    console.warn(`[BackendConnector] Bridge down. Attempting auto-reconnect for "${name}"...`);
+                    console.warn(`[BackendConnector] Bridge collapsed. Auto-recovering for "${name}"...`);
                     try {
-                        await this.invokeTauri("engine_reconnect");
-                        // Small delay to let the sidecar boot
-                        await new Promise(r => setTimeout(r, 1500));
+                        await this.reconnect();
                         return await this.runWorkflow(name, { ...payload, _isRetry: true });
                     } catch (reconnectErr) {
-                        console.error("[BackendConnector] Auto-reconnect failed:", reconnectErr);
+                        console.error("[BackendConnector] Recovery failed.");
                     }
                 }
 
-                const status = await this.getBackendStatus();
-                if (status === "crashed") this.setBackendStatus("crashed");
                 throw err;
             }
         }
     }
 
-    // Initialize immediately but delay DOM operations
-    window.BackendConnector = BackendConnector;
+    // Initialize Global
     window.backendConnector = new BackendConnector();
     window.backend = window.backendConnector; 
+
 })();

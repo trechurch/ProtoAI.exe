@@ -1,0 +1,170 @@
+Memory Distillation Rules
+Memory distillation is the deterministic process of compressing numerous atomic memory logs into a canonical, minimal, and lossless representation.
+2.1 Distillation Trigger Conditions
+Distillation execution is strictly gated and occurs only when:
+
+
+A Project Memory directory exceeds N=50 raw memory items, OR
+A Workflow Memory config exceeds N=20 raw operational overrides, OR
+The user explicitly invokes the distillation command, OR
+A single memory item is modified more than 3 times (the Stability Threshold).
+
+2.2 Distillation Method
+The distillation pipeline must execute the following actions:
+
+Merge Duplicates: Identify and consolidate overlapping entries.
+Collapse Related Items: Group nested concepts into single, multi-key JSON structures.
+Preserve Verbatim Intent: Keep raw, original user phrases intact to prevent semantic drift.
+Zero Inference: Never infer unstated facts, assume hidden preferences, or invent details.
+Instruction Integrity: Never rewrite or dilute user-provided prompt instructions.
+Constraint Preservation: Never compress away, bypass, or simplify hard safety or architectural boundaries.
+
+The output must be deterministic, JSON-serializable, human-editable, and stored in its respective workspace namespace.
+2.3 Distillation Schema
+Every distilled memory item must strictly conform to this schema:
+JSON
+text{
+  "id": "uuid-v4-identifier",
+  "type": "identity|project|workflow|wisdom",
+  "source": "user|system|distilled",
+  "created_at": "ISO8601_TIMESTAMP",
+  "updated_at": "ISO8601_TIMESTAMP",
+  "content": {
+    "summary": "High-level consolidated description of the memory/rule.",
+    "verbatim": [
+      "Exact user statement 1",
+      "Exact user statement 2"
+    ],
+    "constraints": [
+      "Absolute do-not-bypass constraint 1",
+      "Absolute do-not-bypass constraint 2"
+    ],
+    "tags": ["architecture", "preference", "naming", "routing"]
+  }
+}
+Rule: All distilled memories must retain original user inputs in the verbatim array to safeguard the source context.
+3. Memory & Storage Architecture
+All memory, knowledge, and wisdom structures are saved in a highly portable, drive-agnostic, and root-relative file layout.
+text<storage_root>/
+├── protoai/
+│   ├── memory/
+│   │   ├── identity.json         <-- Encrypted at rest, user-wide facts
+│   │   ├── wisdom.json           <-- Synthesized cross-domain rules & heuristics
+│   │   └── workflows/
+│   │       └── <workflow_id>.json <-- Isolated workflow logic and limits
+│   └── tmp/
+│       └── session/
+│           └── <session_id>.json <-- Ephemeral, highly volatile RAM buffers
+└── projects/
+    └── <project_name>/
+        ├── memory/
+        │   └── project.json      <-- Bound to directory, travels with code
+        └── knowledge/            <-- Project-specific markdown, reference docs, schema maps
+3.1 Identity Memory Storage
+
+Path: /protoai/memory/identity.json
+Rules: Must be encrypted at rest, fully versioned using Git-style change tracking, and easily exportable or deletable by the user in a single action.
+
+3.2 Project Memory Storage
+
+Path: /projects/<project>/memory/project.json
+Rules: Must live entirely inside the project directory, travel with the project repository, be human-readable across any active ProtoAI instance, contain zero sensitive personal data, and pass schema validation on load.
+
+3.3 Workflow Memory Storage
+
+Path: /protoai/memory/workflows/<workflow>.json
+Rules: Loaded strictly when the associated workflow becomes active, must never leak operational parameters across different workflows, and is fully overrideable by local project-specific memory.
+
+3.4 Ephemeral Session Memory Storage
+
+Path: /protoai/tmp/session/<session_id>.json (RAM or Temp Disk)
+Rules: Automatically destroyed after 24 hours of inactivity, never distilled, never exported, and never used to calculate long-term user personalization models.
+
+3.5 Knowledge Layer Storage
+
+Path: /projects/<project>/knowledge/ (Local) and /protoai/knowledge/ (Global)
+Rules: Contains raw markdown, JSON schemas, or reference manuals. Read-only to the prompt generator; indexed directly for vector or keyword extraction.
+
+3.6 Wisdom Layer Storage
+
+Path: /protoai/memory/wisdom.json
+Rules: Contains synthesized reasoning shortcuts and SDOA execution rules generated via multi-project distillation. Fully readable by the orchestrator, and human-editable for behavior refinement.
+
+
+Memory Injection Rules
+To protect context windows and maintain execution predictability, ProtoAI strictly prohibits blind memory dumps.
+4.1 Injection Gating
+Context elements are injected if and only if:
+
+
+The active behavior profile permits memory utilization.
+The current workflow config authorizes memory access.
+The active project boundaries allow context resolution.
+The user has not manually suspended memory context for the session.
+
+4.2 Injection Priority (Resolution Chain)
+When resolving conflicting instructions, ProtoAI evaluates prompts using a deterministic top-down priority hierarchy:
+text[HIGHEST PRIORITY]
+  ├── 1. User Prompt (Explicit, direct commands always override everything)
+  ├── 2. SDOA Core Rules (System infrastructure safety and execution paths)
+  ├── 3. Behavior Profile / Wisdom Heuristics (Synthesized reasoning styles)
+  ├── 4. Workflow Memory (Sequence parameters and constraints)
+  ├── 5. Project Memory (Codebase conventions and workspace rules)
+  └── 6. Identity Memory (General user facts and baseline style preferences)
+[LOWEST PRIORITY]
+Rule: The explicit User Prompt always overrides system memory. Identity memory always yields to Project memory when workspace-specific files are active.
+4.3 Injection Format
+Memory components must be injected as strictly parsed, labeled, markdown-structured blocks rather than conversational narrative text:
+Markdown
+text[MEMORY:PROJECT]
+- Architecture: SDOA v3
+- Path Rules: root-relative, drive-agnostic
+- Constraints: no hardcoded paths, no destructive operations
+
+[MEMORY:WORKFLOW]
+- Active Ingestion Rule: Strict JSON parsing validation
+- Target Model Routing: Gemini 1.5 Pro (Reasoning), Claude Pro (Refinement)
+
+[MEMORY:WISDOM]
+- Rule: Prioritize lean, multi-dashboard workspace states over scattered windows.
+
+Memory Safety & Guardrails
+To prevent semantic degradation, ProtoAI enforces rigorous behavioral guardrails:
+
+
+No Emergent Hallucinations: The system must never auto-generate memory items based on speculative LLM outputs.
+No Inferred Profiling: The system must never guess personal traits, beliefs, or user status; entries must be explicitly stated.
+Strict Sandboxing: Project A memory can never be loaded, scanned, or leaked during an active session in Project B.
+No Non-Consensual Writes: File modifications to /protoai/memory/ and /projects/ require explicit validation or confirmation prompts before serialization.
+Log Scrubbing: Sensitive user parameters, passwords, API tokens, and private identifiers must be automatically filtered and excluded from system debug logs.
+
+
+Memory Editing & Administration
+Users retain ultimate, real-time control over their cognitive footprints. Through the ProtoAI dashboard or CLI, users must be able to:
+
+
+View: Interrogate all memory layers in a clean, categorized format.
+Edit: Manually rewrite, modify, or correct JSON memory elements.
+Delete: Prune individual keys or purge entire memory directories safely.
+Disable: Suspend memory integration globally or per session thread.
+Export & Backup: Create structured, offline-compatible backup zips of identity, project, and workflow configurations.
+
+ProtoAI automatically maintains a local, version-controlled history (using timestamped backup copies) of every memory file prior to modification, ensuring instant rollback capabilities.
+7. The Memory Distillation Pipeline
+text┌───────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
+│  COLLECT  │ ──> │ NORMALIZE │ ──> │  CLUSTER  │ ──> │   MERGE   │
+└───────────┘     └───────────┘     └───────────┘     └───────────┘
+                                                            │
+                                                            ▼
+┌───────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
+│  NOTIFY   │ <── │   WRITE   │ <── │ VALIDATE  │ <── │ PRESERVE  │
+└───────────┘     └───────────┘     └───────────┘     └───────────┘
+During distillation execution, the system processes data using a linear 9-stage sequence:
+StepStageAction1CollectGather all active memory nodes in the target workspace namespace.2NormalizeParse raw inputs and cast them into the canonical schema layout.3ClusterRun semantic similarity analysis to group highly correlated memory nodes.4MergeCombine entries sharing equivalent semantic meaning into a single entry.5PreserveExtract and append raw user inputs to the target item’s verbatim array.6CompressGenerate an ultra-dense, deterministic, and scannable summary string.7ValidateExecute JSON schema checks, constraint integrity matches, and user-intent guardrails.8WriteSafely commit the consolidated changes to the correct namespace file, generating a local version backup.9NotifyPresent a clear diff of memory changes to the user for review.
+8. The Non-Negotiables (Core Operational Pillars)
+
+No Destructive Automation: Distillation, consolidation, or pruning must never delete distinct user statements without explicit confirmation.
+Zero Silent Operations: All memory writes, system updates, and distillation pipelines must log operations clearly and notify the user interface.
+No Ambiguous Setups: Memory resolution must follow strict top-down logic; under no circumstances should the system speculate or resolve context through guessing.
+No Hardcoded System Paths: All directory schemas must remain portable, root-relative, and system-agnostic across execution environments.
+Full Transparency: The user must be able to audit every piece of memory injected into an active model context at any time.```

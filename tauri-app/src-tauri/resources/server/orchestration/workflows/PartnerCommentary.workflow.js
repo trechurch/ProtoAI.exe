@@ -33,7 +33,7 @@ class PartnerCommentaryWorkflow extends WorkflowBase {
             const result = await orchestrator.commentary(message, response, persona);
             return new WorkflowResult("ok", { text: result.text, persona: result.persona });
         } catch (err) {
-            return new WorkflowResult("error", { error: err.message });
+            return new WorkflowResult("error", null, err.message);
         }
     }
 }

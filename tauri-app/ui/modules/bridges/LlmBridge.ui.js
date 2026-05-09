@@ -237,7 +237,7 @@
 
         // ── orchestrator ─────────────────────────────────────
         get _orchestratorEnabled() {
-            return localStorage.getItem("protoai:orchestrator:enabled") === "true";
+            return localStorage.getItem("protoai:orchestrator:enabled") !== "false";
         }
 
         _playbackOrchestratorEvents(orchestrator) {

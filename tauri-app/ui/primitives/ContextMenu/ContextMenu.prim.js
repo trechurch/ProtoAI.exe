@@ -21,6 +21,7 @@
      * @param {Object} config.position — { x, y }
      */
     function show(config = {}) {
+        console.log("[ContextMenu] Opening at:", config.position);
         hide();
         const menu = document.createElement("div");
         menu.className = "sdoa-context-menu";

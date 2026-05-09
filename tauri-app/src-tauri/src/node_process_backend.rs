@@ -165,6 +165,7 @@ impl NodeProcessBackend {
             "projects" | "profiles" => Duration::from_secs(10),
             "ingest" | "history" | "upload" => Duration::from_secs(15),
             "chat" | "image_gen" | "deep_search" | "qmd_index" | "multi_model_send" => Duration::from_secs(180),
+            "PartnerCommentary.workflow" => Duration::from_secs(300),
             _ => Duration::from_secs(30),
         }
     }

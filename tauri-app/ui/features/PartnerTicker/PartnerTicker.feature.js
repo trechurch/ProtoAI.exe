@@ -1,20 +1,23 @@
-/* PartnerTicker.feature.js — SDOA v4 Feature */
+/* ============================================================
+   PartnerTicker.feature.js — SDOA v4 Feature
+   version: 4.1.0
+   Last modified: 2026-05-09 04:10 UTC
+   ============================================================ */
+
 (function () {
     "use strict";
 
     const MANIFEST = {
-        id: "PartnerTicker.feature", type: "feature", layer: 1,
-        runtime: "Browser", version: "1.0.0",
+        id: "PartnerTicker.feature", 
+        type: "feature", 
+        layer: 1,
+        runtime: "Browser", 
+        version: "4.1.0",
         requires: ["Toast.prim"],
-        dataFiles: [],
-        lifecycle: ["init", "mount"],
-        actions: { 
-            commands: {
-                pushEvent: { description: "Add event to log." },
-                playback:  { description: "Replay event array." }
-            }
-        },
-        docs: { description: "Silent Partner activity ticker." }
+        docs: {
+            description: "Silent Partner activity ticker. Displays system events and spontaneous commentary.",
+            author: "ProtoAI Team"
+        }
     };
 
     const EVENT_META = {
@@ -37,13 +40,15 @@
     const STORAGE_ENABLED = "protoai:orchestrator:enabled";
     const STORAGE_TOGGLES = "protoai:ticker:toggles";
     const STORAGE_STATE   = "protoai:ticker:state";
-    const STORAGE_PERSONA = "protoai:ticker:persona";
+    const STORAGE_PERSONA = "sdoa.pt.persona";
+    const STORAGE_PULSE   = "sdoa.pt.pulse_freq";
 
     let _container    = null;
     let _log          = [];
     let _tickerItems  = [];
     let _state        = localStorage.getItem(STORAGE_STATE) || "locked";
     let _persona      = localStorage.getItem(STORAGE_PERSONA) || "advisor";
+    let _pulseFreq    = parseInt(localStorage.getItem(STORAGE_PULSE) || "10", 10); // Default 10 mins
     let _hoverTimer   = null;
     let _heartbeatTimer = null;
     let _toggles      = _loadToggles();
@@ -60,7 +65,7 @@
     ];
 
     async function init() {
-        if (window.ModuleLoader) window.ModuleLoader.register(MANIFEST, { init, mount, pushEvent, playback });
+        console.log(`[PartnerTicker.feature] Initializing v${MANIFEST.version}...`);
         window.PartnerTicker = { pushEvent, playback, render: mount }; // Compatibility
     }
 
@@ -85,6 +90,7 @@
     }
 
     function pushEvent(type, data = {}) {
+        console.log(`[PartnerTicker] Pushing event: ${type}`, data);
         const meta = EVENT_META[type] || { icon: "·", label: () => type, color: "dim" };
         const entry = { type, data, icon: meta.icon, text: meta.label(data), color: meta.color, ts: Date.now() };
         _log.push(entry);
@@ -145,7 +151,19 @@
                     <option value="friend"   ${_persona === "friend"   ? "selected" : ""}>Friend</option>
                     <option value="comedy"   ${_persona === "comedy"   ? "selected" : ""}>Comedy</option>
                 </select>
-                <button id="ptDownloadBtn" class="sdoa-btn sdoa-btn--sm" style="font-size:10px; height:24px; padding:0 8px; background:var(--bg-accent-subtle); border-color:var(--border-accent);">📥 Download Model</button>
+                <button id="ptDownloadBtn" class="sdoa-btn sdoa-btn--sm" title="Download Model" style="font-size:10px; height:24px; padding:0 8px; background:var(--bg-accent-subtle); border-color:var(--border-accent);">📥</button>
+                <button id="ptForceBtn" class="sdoa-btn sdoa-btn--sm" title="Ask for Observation" style="font-size:10px; height:24px; padding:0 8px; margin-left:4px; background:var(--bg-accent-subtle); border-color:var(--border-accent);">⚡</button>
+            </div>
+            <div class="pt-panel-toggles" style="justify-content: space-between; align-items: center;">
+                <div style="font-size: 10px; color: var(--text-dim);">Pulse Frequency:</div>
+                <select id="ptPulseSelect" class="sdoa-select sdoa-select--sm" style="width:70px; height:22px; font-size:10px;">
+                    <option value="1"  ${_pulseFreq === 1  ? "selected" : ""}>1m</option>
+                    <option value="5"  ${_pulseFreq === 5  ? "selected" : ""}>5m</option>
+                    <option value="10" ${_pulseFreq === 10 ? "selected" : ""}>10m</option>
+                    <option value="15" ${_pulseFreq === 15 ? "selected" : ""}>15m</option>
+                    <option value="30" ${_pulseFreq === 30 ? "selected" : ""}>30m</option>
+                    <option value="60" ${_pulseFreq === 60 ? "selected" : ""}>1h</option>
+                </select>
             </div>
             <div class="pt-panel-toggles">
                 ${FEATURES.map(f => `
@@ -180,8 +198,9 @@
 
         panel.querySelector("#ptDownloadBtn")?.addEventListener("click", async (e) => {
             const btn = e.target;
+            const originalText = btn.textContent;
             btn.disabled = true;
-            btn.textContent = "⏳ Downloading...";
+            btn.textContent = "⏳";
             
             try {
                 const res = await window.backendConnector.runWorkflow("SysProvisionModel.workflow", {
@@ -191,17 +210,40 @@
                 });
 
                 if (res.ok !== false) {
-                    btn.textContent = "✅ Ready";
+                    btn.textContent = "✅";
                     window.ToastPrim?.show("Local model ready for use", "ok");
                     pushEvent("local:modelLoaded", { modelPath: res.path });
                 } else {
                     throw new Error(res.error);
                 }
             } catch (err) {
-                btn.textContent = "❌ Failed";
+                btn.textContent = "❌";
                 btn.disabled = false;
                 alert("Download failed: " + err.message);
+            } finally {
+                setTimeout(() => { if (btn.disabled) { btn.disabled = false; btn.textContent = originalText; } }, 2000);
             }
+        });
+
+        panel.querySelector("#ptForceBtn")?.addEventListener("click", async (e) => {
+            if (!_isEnabled()) return window.ToastPrim?.show("Enable Silent Partner first", "warn");
+            const btn = e.target;
+            const originalText = btn.textContent;
+            btn.textContent = "⏳";
+            btn.disabled = true;
+            try {
+                await _generateCommentary("Manual trigger: Provide an immediate observation.", "Look at the current project context and provide a spontaneous, helpful observation or critique.");
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        panel.querySelector("#ptPulseSelect")?.addEventListener("change", (e) => {
+            _pulseFreq = parseInt(e.target.value, 10);
+            localStorage.setItem(STORAGE_PULSE, _pulseFreq);
+            window.ToastPrim?.show(`Heartbeat frequency: ${_pulseFreq}m`, "info");
+            _startHeartbeat(); // Reset timer with new frequency
         });
     }
 
@@ -225,35 +267,78 @@
         Object.keys(EVENT_META).forEach(type => bus.on(type, (data) => pushEvent(type, data || {})));
 
         // Background Observations
+        console.log("[PartnerTicker] Wiring bus events...");
         bus.on("app:projectSelected", (payload) => {
+            console.log("[PartnerTicker] Project selected event received:", payload);
             if (_isEnabled()) {
                 _generateCommentary(`I just switched to the project: ${payload.project}`, "Observe the project and say something brief.");
             }
         });
+
+        // Trigger spontaneous reactions after assistant messages
+        // bus.on("chat:appendMessage", (data) => { ... }); // REMOVED: Handled by MultiModelSend now
+
+        // Add a "System Ready" event immediately
+        pushEvent("local:modelLoaded", { message: "Silent Partner system is awake." });
+        window.ToastPrim?.show("Silent Partner (NSS) is online.", "info");
     }
+
+    let _watchdogTimer = null;
 
     async function _generateCommentary(message, response) {
         if (!window.backendConnector) return;
-        pushEvent("orchestrator:commentary_generating", { persona: _persona });
+        const thinkingId = `think_${Date.now()}`;
+        let watchdogFired = false;
+
+        // Watchdog: If no reply in 20s, auto-unlock UI (extended from 15s).
+        // Sets watchdogFired so the later try/catch won't double-post an error.
+        clearTimeout(_watchdogTimer);
+        _watchdogTimer = setTimeout(() => {
+            watchdogFired = true;
+            console.warn("[PartnerTicker] Commentary timed out. Forcing UI unlock.");
+            pushEvent("orchestrator:error", { stage: "Silent Partner", message: "Commentary generation timed out." });
+            window.EventBus?.emit("app:force_reset");
+        }, 20000);
+
+        pushEvent("orchestrator:commentary_generating", { persona: _persona, id: thinkingId });
+
         try {
             const res = await window.backendConnector.runWorkflow("PartnerCommentary.workflow", {
                 message, response, persona: _persona
             });
-            if (res?.text) {
-                pushEvent("orchestrator:commentary", { text: res.text, persona: res.persona });
+
+            // If watchdog already fired, swallow the result — the error was already shown.
+            if (watchdogFired) return;
+
+            const text = res?.data?.text || res?.text;
+            const persona = res?.data?.persona || res?.persona;
+
+            if (text) {
+                pushEvent("orchestrator:commentary", { text, persona: persona || _persona });
+            } else if (res?.ok === false) {
+                const msg = res.error || res.detail || "Backend returned an error";
+                pushEvent("orchestrator:error", { stage: "commentary", message: msg });
             }
+            // Empty text with ok:true means local model isn't downloaded — silent drop.
         } catch (err) {
+            if (watchdogFired) return;
             console.warn("[PartnerTicker] Commentary failed:", err);
+            const msg = (typeof err === "string") ? err : (err.message || JSON.stringify(err));
+            pushEvent("orchestrator:error", { stage: "commentary", message: msg || "Failed to generate commentary." });
+        } finally {
+            clearTimeout(_watchdogTimer);
+            _tickerItems = _tickerItems.filter(item => item.data?.id !== thinkingId);
+            _updateTickerStrip();
         }
     }
 
     function _startHeartbeat() {
         if (_heartbeatTimer) clearTimeout(_heartbeatTimer);
 
-        // Random delay between 5 and 15 minutes (300,000ms to 900,000ms)
-        const min = 5 * 60 * 1000;
-        const max = 15 * 60 * 1000;
-        const delay = Math.floor(Math.random() * (max - min + 1)) + min;
+        // Randomized pulse around the user-defined frequency (+/- 20% jitter)
+        const baseMs = _pulseFreq * 60 * 1000;
+        const jitter = baseMs * 0.2;
+        const delay  = baseMs + (Math.random() * jitter * 2 - jitter);
 
         _heartbeatTimer = setTimeout(async () => {
             if (_isEnabled()) {
@@ -283,5 +368,5 @@
     }
 
     window.PartnerTickerFeature = { MANIFEST, init, mount, pushEvent, playback };
-    if (window.TauriUtils) window.TauriUtils.domReady(init);
+    if (window.ModuleLoader) window.ModuleLoader.register(MANIFEST, window.PartnerTickerFeature);
 })();

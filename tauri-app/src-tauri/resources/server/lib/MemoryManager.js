@@ -1,156 +1,252 @@
 // ============================================================
-// MemoryManager.js — SDOA v3.0 Service (NodeJS)
-// version: 1.0.0
-// Last modified: 2026-05-02 10:00 UTC
-// depends: fs-extra, LocalModelAdapter, paths
+// MemoryManager.js — SDOA v4.0 Service (NodeJS)
+// version: 2.1.0
+// Last modified: 2026-05-06 06:40 UTC
+// depends: fs-extra, LocalModelAdapter, paths, crypto
 // ============================================================
 
-// MemoryManager.js — Persistent long-term memory and user profiling
 const fs = require("fs-extra");
 const path = require("path");
+const crypto = require("crypto");
 const paths = require("../access/env/paths");
-const local = require("../access/llm/LocalModelAdapter");
+let local = null; // Lazy-loaded
+const Middleware = require("../services/Middleware.service");
+
+// Fallback for randomUUID if on older Node.js
+const uuid = () => {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    return crypto.randomBytes(16).toString("hex");
+};
 
 class MemoryManager {
-
-    // ── SDOA v3.0 MANIFEST ───────────────────────────────────
     static MANIFEST = {
-        id:           "MemoryManager",
-        type:         "service",
-        runtime:      "NodeJS",
-        version:      "1.0.0",
+        id: "MemoryManager",
+        type: "service",
+        runtime: "NodeJS",
+        version: "2.1.0",
         capabilities: [
-            "memory.loadGlobal",
-            "memory.loadUserProfile",
+            "memory.load",
             "memory.record",
-            "memory.distillProfile",
+            "memory.distill",
+            "memory.audit"
         ],
-        dependencies: ["fs-extra", "LocalModelAdapter", "paths"],
         docs: {
-            description: "Persistent long-term memory and user profiling. Records observations, distills them into a coherent user trait profile via the local GGUF model.",
+            description: "Deterministic memory distillation and cognitive hierarchy management (Identity, Knowledge, Wisdom).",
             author: "ProtoAI team",
-        },
-        actions: {
-            commands: {
-                loadGlobal:      { description: "Load global shared memory facts.", input: {}, output: "{ facts, observations }" },
-                loadUserProfile: { description: "Load persistent user profile.", input: {}, output: "UserProfile" },
-                record:          { description: "Record a fact or user observation.", input: { type: "string", content: "string", project: "string?" }, output: "void" },
-                distillProfile:  { description: "Use local model to distill raw observations into a coherent trait profile.", input: {}, output: "void" },
-            },
-            triggers:  {},
-            emits:     {},
-            workflows: {},
-        },
+        }
     };
-    // ── end MANIFEST ─────────────────────────────────────────
 
-  constructor() {
-    this.globalPath = paths.globalMemory();
-    this.userProfilePath = paths.userProfile();
-  }
-
-  /**
-   * Load the global memory (shared across all projects)
-   */
-  loadGlobal() {
-    if (!fs.existsSync(this.globalPath)) return { facts: [], observations: [] };
-    try {
-      return fs.readJsonSync(this.globalPath);
-    } catch (_) {
-      return { facts: [], observations: [] };
+    constructor() {
+        this.STABILITY_THRESHOLD = 3;
+        this.PROJECT_LIMIT = 50;
+        this.WORKFLOW_LIMIT = 20;
     }
-  }
 
-  /**
-   * Load the persistent user profile
-   */
-  loadUserProfile() {
-    if (!fs.existsSync(this.userProfilePath)) {
-      return {
-        name: "User",
-        preferences: {},
-        style: "balanced",
-        observations: [],
-        traits: [],
-        lastUpdated: new Date().toISOString()
-      };
+    // ── Storage Access ────────────────────────────────────────
+
+    loadIdentity() {
+        const raw = this._safeRead(paths.identityMemory(), {
+            id: uuid(),
+            type: "identity",
+            source: "user",
+            content: { name: "User", preferences: [], background: "", constraints: [], tags: [] }
+        });
+
+        // Robustness: ensure we return a structure that has .content if possible, 
+        // or map flat structure to nested if that's what we found.
+        if (!raw.content && raw.name) {
+            return {
+                ...raw,
+                content: {
+                    name: raw.name || "User",
+                    preferences: Array.isArray(raw.preferences) ? raw.preferences : [],
+                    background: raw.background || "",
+                    constraints: raw.constraints || [],
+                    tags: raw.traits || raw.tags || []
+                }
+            };
+        }
+        return raw;
     }
-    try {
-      return fs.readJsonSync(this.userProfilePath);
-    } catch (_) {
-      return { observations: [] };
+
+    loadProjectMemory(project) {
+        return this._safeRead(paths.projectMemory(project), {
+            id: uuid(),
+            type: "project",
+            source: "system",
+            content: { summary: "", verbatim: [], constraints: [], tags: [] }
+        });
     }
-  }
 
-  /**
-   * Save a fact or observation to the appropriate store
-   */
-  async record(type, content, project = null) {
-    if (type === "user_observation") {
-      const profile = this.loadUserProfile();
-      profile.observations.push({ content, ts: Date.now(), project });
-      // Keep only last 100 observations before compaction
-      if (profile.observations.length > 100) {
-        profile.observations = profile.observations.slice(-100);
-      }
-      fs.writeJsonSync(this.userProfilePath, profile, { spaces: 2 });
-    } else {
-      const global = this.loadGlobal();
-      global.facts.push({ content, ts: Date.now(), project });
-      fs.writeJsonSync(this.globalPath, global, { spaces: 2 });
+    loadWisdom() {
+        return this._safeRead(paths.wisdomMemory(), []);
     }
-  }
 
-  /**
-   * Use the local model to distill raw observations into a coherent profile
-   */
-  async distillProfile() {
-    const profile = this.loadUserProfile();
-    if (profile.observations.length < 5) return; // Wait for enough data
-
-    const modelPath = await this._getLocalModelPath();
-    if (!modelPath) return;
-
-    const obsText = profile.observations.map(o => `- ${o.content}`).join("\n");
-    const sys = `You are a psychological and behavioral profiler for an AI assistant. Analyze raw observations and update the user's persistent traits and preferences. Be concise. Output JSON only: {"traits":["trait1"],"preferences":{"category":"value"}}`;
-    const prompt = `Current observations:\n${obsText}\n\nExisting profile traits: ${profile.traits.join(", ")}\n\nDistill into new JSON profile:`;
-
-    try {
-      const raw = await local.generate(prompt, {
-        modelPath,
-        maxTokens: 300,
-        temperature: 0.2,
-        systemPrompt: sys
-      });
-
-      const m = raw.match(/\{[\s\S]*?\}/);
-      if (m) {
-        const distilled = JSON.parse(m[0]);
-        profile.traits = [...new Set([...profile.traits, ...(distilled.traits || [])])].slice(-10);
-        profile.preferences = Object.assign(profile.preferences, distilled.preferences || {});
-        profile.lastUpdated = new Date().toISOString();
-        // Archive distilled observations? For now just keep them.
-        fs.writeJsonSync(this.userProfilePath, profile, { spaces: 2 });
-      }
-    } catch (e) {
-      console.error("[MemoryManager] Distill failed:", e.message);
+    /**
+     * Compatibility helper for Orchestrator
+     */
+    loadUserProfile() {
+        const identity = this.loadIdentity();
+        const c = identity.content || {};
+        return {
+            ...c,
+            traits: c.tags || c.traits || []
+        };
     }
-  }
 
-  async _getLocalModelPath() {
-    try {
-      const file = paths.resolve("config", "models.json");
-      if (!fs.existsSync(file)) return null;
-      const models = fs.readJsonSync(file);
-      const entry = (models.entries || []).find(m => m.provider === "local");
-      if (!entry) return null;
-      const modelPath = entry.model_path;
-      if (path.isAbsolute(modelPath)) return modelPath;
-      return path.join(paths.root, modelPath.replace(/^\.\//, ""));
-    } catch (_) {
-      return null;
+    // ── Operational Methods ───────────────────────────────────
+
+    async record(type, content, project = null) {
+        Middleware.log(`[MemoryManager] Recording ${type} memory...`);
+        
+        if (type === "project" && project) {
+            const mem = this.loadProjectMemory(project);
+            mem.content.verbatim.push(content);
+            mem.updated_at = new Date().toISOString();
+            this._safeWrite(paths.projectMemory(project), mem);
+            
+            if (mem.content.verbatim.length >= this.PROJECT_LIMIT) {
+                await this.distill("project", project);
+            }
+        } else if (type === "identity" || type === "user_observation") {
+            const mem = this.loadIdentity();
+            const targetField = type === "user_observation" ? "preferences" : "preferences"; // For now, both go to preferences
+            mem.content[targetField].push(content);
+            mem.updated_at = new Date().toISOString();
+            this._safeWrite(paths.identityMemory(), mem);
+        }
     }
-  }
+
+    /**
+     * 9-Stage Distillation Pipeline
+     */
+    async distill(type, target = null) {
+        Middleware.log(`[MemoryManager] Starting 9-stage distillation for ${type}:${target || "global"}...`);
+
+        // 1. COLLECT
+        let rawData = null;
+        let targetPath = null;
+        if (type === "project") {
+            rawData = this.loadProjectMemory(target);
+            targetPath = paths.projectMemory(target);
+        } else if (type === "identity") {
+            rawData = this.loadIdentity();
+            targetPath = paths.identityMemory();
+        }
+
+        if (!rawData || (rawData.content.verbatim || []).length === 0) {
+            return { ok: false, error: "No memory items to distill" };
+        }
+
+        // 2-6. LLM PROCESSING (Normalize, Cluster, Merge, Preserve, Compress)
+        const distilledContent = await this._runLlmDistillation(rawData);
+        if (!distilledContent) return { ok: false, error: "LLM distillation failed" };
+
+        // 7. VALIDATE
+        if (!distilledContent.summary || !distilledContent.verbatim) {
+            return { ok: false, error: "Invalid distillation output schema" };
+        }
+
+        // 8. WRITE (with version backup)
+        const finalMemory = {
+            ...rawData,
+            source: "distilled",
+            updated_at: new Date().toISOString(),
+            content: {
+                ...distilledContent,
+                tags: [...new Set([...(rawData.content.tags || []), ...(distilledContent.tags || [])])]
+            }
+        };
+
+        this._createBackup(targetPath);
+        this._safeWrite(targetPath, finalMemory);
+
+        // 9. NOTIFY (Handled via return for UI to display diff)
+        return { ok: true, type, target, before: rawData, after: finalMemory };
+    }
+
+    // ── Internal Helpers ──────────────────────────────────────
+
+    async _runLlmDistillation(memory) {
+        if (!local || typeof local.generate !== 'function') {
+            local = require("../access/llm/LocalModelAdapter");
+        }
+        const modelPath = await this._getLocalModelPath();
+        if (!modelPath) return null;
+
+        const system = `You are the ProtoAI Memory Distillation Engine. 
+RULES:
+1. Merge duplicates and collapse related items.
+2. PRESERVE VERBATIM user intent in the 'verbatim' array.
+3. ZERO INFERENCE: Do not invent facts or read between lines.
+4. Output strict JSON only.
+
+SCHEMA:
+{
+  "summary": "one-line dense summary",
+  "verbatim": ["original user statements"],
+  "constraints": ["hard rules identified"],
+  "tags": ["keywords"]
+}`;
+
+        const prompt = `DISTILL THESE MEMORIES:
+${JSON.stringify(memory.content.verbatim || memory.content.preferences, null, 2)}
+
+Existing constraints: ${JSON.stringify(memory.content.constraints || [])}
+Existing tags: ${JSON.stringify(memory.content.tags || [])}
+
+JSON OUTPUT:`;
+
+        try {
+            const raw = await local.generate(prompt, {
+                modelPath,
+                maxTokens: 500,
+                temperature: 0.1,
+                systemPrompt: system
+            });
+
+            const m = raw.match(/\{[\s\S]*?\}/);
+            return m ? JSON.parse(m[0]) : null;
+        } catch (e) {
+            console.error("[MemoryManager] LLM Error:", e.message);
+            return null;
+        }
+    }
+
+    _safeRead(filePath, fallback) {
+        if (!fs.existsSync(filePath)) return fallback;
+        try {
+            return fs.readJsonSync(filePath);
+        } catch (_) {
+            return fallback;
+        }
+    }
+
+    _safeWrite(filePath, data) {
+        fs.ensureDirSync(path.dirname(filePath));
+        fs.writeJsonSync(filePath, data, { spaces: 2 });
+    }
+
+    _createBackup(filePath) {
+        if (!fs.existsSync(filePath)) return;
+        const backupPath = `${filePath}.${Date.now()}.bak`;
+        fs.copySync(filePath, backupPath);
+    }
+
+    async _getLocalModelPath() {
+        try {
+            const file = paths.resolve("config", "models.json");
+            if (!fs.existsSync(file)) return null;
+            const models = fs.readJsonSync(file);
+            const entry = (models.entries || []).find(m => m.provider === "local");
+            if (!entry) return null;
+            const modelPath = entry.model_path;
+            if (path.isAbsolute(modelPath)) return modelPath;
+            return path.join(paths.root, modelPath.replace(/^\.\//, ""));
+        } catch (_) {
+            return null;
+        }
+    }
 }
 
 module.exports = new MemoryManager();

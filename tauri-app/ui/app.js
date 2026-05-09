@@ -17,36 +17,34 @@ async function init() {
         bootLog("Initializing environment...");
         backend = window.backendConnector;
 
-        if (window.PartnerTicker) {
-            window.PartnerTicker.render(document.getElementById("partnerTickerHost"));
-        }
-
         const sidebarStatus = document.getElementById("sidebarStatusText");
-        if (sidebarStatus) sidebarStatus.textContent = "Starting engine…";
+        if (sidebarStatus) sidebarStatus.textContent = "Connecting…";
 
-        const ready = await _waitForBridge();
+        // Hard 5-second safety timeout for the bridge
+        const ready = await Promise.race([
+            _waitForBridge(),
+            new Promise(r => setTimeout(() => r(false), 5000))
+        ]);
+
         if (!ready) {
-            console.warn("[app.js] Engine bridge timed out — continuing in degraded mode");
-            backend?.setBackendStatus("unavailable", "Engine timed out");
+            console.warn("[app.js] Engine bridge UNRESPONSIVE — booting in degraded mode");
+            backend?.setBackendStatus("unavailable", "Engine Deadlock");
         } else {
             backend?.setBackendStatus("tauri");
         }
 
-        if (sidebarStatus) sidebarStatus.textContent = ready ? "Tauri IPC" : "Degraded";
-
-        const flags = await backend?.runWorkflow("get_launch_flags").catch(() => null);
-        if (flags?.setupWizard && typeof window.openFirstRunWizard === "function") {
-            window.openFirstRunWizard();
-            return;
+        if (sidebarStatus) {
+            sidebarStatus.textContent = ready ? "Tauri IPC" : "Disconnected";
+            const dot = document.getElementById("statusDot");
+            if (dot) dot.style.background = ready ? "var(--color-ok)" : "var(--color-error)";
         }
 
-        // ── SDOA v4 ──────────────────────────────────────────
-        // Initialize all registered v4 modules
+        // ── SDOA v4 Boot ──────────────────────────────────────
         if (window.ModuleLoader) {
             bootLog("Initializing modules...");
             await window.ModuleLoader.initAll();
 
-            bootLog("Mounting features...");
+            bootLog("Mounting UI...");
             const containers = {
                 "Chat.feature":         document.getElementById("pane-left"),
                 "FileExplorer.feature": document.getElementById("rightPaneContent"),
@@ -56,41 +54,25 @@ async function init() {
                 "ModelManager.feature": document.body,
                 "Settings.feature":     document.body
             };
-            console.log("[app.js] Mount containers mapped:", Object.keys(containers));
 
             await window.ModuleLoader.mountAll(containers);
         }
 
-        // ── Direct Chat mount fallback ────────────────────────
-        // If ModuleLoader didn't mount Chat (e.g. a silent init
-        // error), mount it directly so the UI is never empty.
-        const paneLeft = document.getElementById("pane-left");
-        if (paneLeft && !paneLeft.querySelector("#chat-feature-main")) {
-            console.warn("[app.js] Chat not mounted by ModuleLoader — mounting directly to pane-left");
-            if (window.ChatFeature?.mount) {
-                await window.ChatFeature.mount(paneLeft);
-            }
-        }
-
-        // ── Finalise ─────────────────────────────────────────
         bootLog("Ready");
-        setTimeout(() => document.getElementById("boot-status")?.remove(), 2000);
-        backend?.setBackendStatus("tauri");
+        setTimeout(() => document.getElementById("boot-status")?.remove(), 1000);
     } catch (err) {
-        console.error("[SDOA Init Error]", err);
-        bootLog("Critical Error: " + err.message);
-        backend?.setBackendStatus("unavailable", err.message);
+        console.error("[app.js] Critical Boot failure:", err);
+        bootLog("Error: " + err.message);
     }
 }
 
-async function _waitForBridge(maxAttempts = 20, intervalMs = 500) {
-    if (typeof window === "undefined" || !window.__TAURI__) return false;
-    
+async function _waitForBridge(maxAttempts = 10, intervalMs = 500) {
+    if (!window.__TAURI__) return false;
     for (let i = 0; i < maxAttempts; i++) {
         try {
-            const status = await window.__TAURI__.core.invoke("engine_status");
+            const status = await window.__TAURI__.core.invoke("engine_status").catch(() => null);
             if (status === "ready") return true;
-        } catch { /* not ready yet */ }
+        } catch { /* spin */ }
         await new Promise(r => setTimeout(r, intervalMs));
     }
     return false;

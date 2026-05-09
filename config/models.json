@@ -1,12 +1,15 @@
 {
   "entries": [
     {
-      "id": "local-qwen2.5-coder-7b",
+      "id": "local-qwen2.5-omni-7b",
       "provider": "local",
-      "name": "Qwen2.5 Coder 7B (Q4_K_M)",
-      "model_path": "models/qwen2.5-coder-7b-q4km/qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+      "backend": "python-http",
+      "name": "Qwen2.5-Omni-7B (Local)",
+      "model_name": "Qwen/Qwen2.5-Omni-7B",
+      "port": 17892,
       "context_size": 8192,
-      "enabled": true
+      "enabled": true,
+      "notes": "Requires first-run setup via Settings → Local AI → Setup Local AI. Downloads ~15 GB from HuggingFace."
     }
   ]
 }

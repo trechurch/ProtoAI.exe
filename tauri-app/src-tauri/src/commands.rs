@@ -9,8 +9,13 @@ use crate::engine_bridge::BridgeState;
 /// This avoids closure lifetime issues by executing the block directly in the macro scope.
 macro_rules! with_bridge {
     ($bridge:expr, |$b:ident| $action:expr) => {{
-        let inner = $bridge.inner.lock().await;
-        match &*inner {
+        // Lock only long enough to clone/check the bridge
+        let b_opt = {
+            let inner = $bridge.inner.lock().await;
+            inner.clone() 
+        };
+
+        match b_opt {
             Some($b) => {
                 $action.await.map_err(|e: anyhow::Error| e.to_string())
             },
