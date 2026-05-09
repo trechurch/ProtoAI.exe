@@ -24,12 +24,12 @@
 
 "use strict";
 
-const path     = require("path");
-const fs       = require("fs");
-const os       = require("os");
-const http     = require("http");
+const path      = require("path");
+const fs        = require("fs");
+const os        = require("os");
+const http      = require("http");
 const { spawn } = require("child_process");
-const paths    = require("../env/paths");
+const paths     = require("../env/paths");
 const Middleware = require("../../services/Middleware.service");
 
 // ── ESM compatibility for node-llama-cpp (legacy backend) ──
@@ -59,7 +59,6 @@ function _findPython() {
     const embedPy  = path.join(paths.root, "python-embed", "python.exe");
     if (fs.existsSync(embedPy)) return embedPy;
 
-    // Fallback for dev — check system PATH
     const fallbacks = ["python3", "python"];
     for (const name of fallbacks) {
         try {
@@ -67,12 +66,11 @@ function _findPython() {
             return name;
         } catch (_) {}
     }
-
     return null;
 }
 
 /**
- * Resolve the path to qwen_server.py, which lives in resources/server/local_model/.
+ * Resolve the path to qwen_server.py in resources/server/local_model/.
  */
 function _serverScriptPath() {
     const candidates = [
@@ -87,7 +85,7 @@ function _serverScriptPath() {
 }
 
 /**
- * Ping the inference server. Returns true when it responds to /health.
+ * Ping the inference server. Returns parsed JSON when it responds to /health.
  */
 function _ping(port, timeoutMs = 2000) {
     return new Promise((resolve) => {
@@ -157,13 +155,8 @@ class LocalModelAdapter {
         type:         "adapter",
         runtime:      "NodeJS",
         version:      "2.0.0",
-        capabilities: [
-            "local.generate",
-            "local.stream",
-            "local.tokenize",
-            "local.budget",
-        ],
-        backends: ["python-http", "llama-cpp"],
+        capabilities: ["local.generate", "local.stream", "local.tokenize", "local.budget"],
+        backends:     ["python-http", "llama-cpp"],
         docs: {
             description: "Runtime adapter for local LLMs. Supports Qwen2.5-Omni-7B via Python HTTP server or legacy GGUF models via node-llama-cpp.",
             author: "ProtoAI team",
@@ -172,10 +165,10 @@ class LocalModelAdapter {
 
     constructor() {
         // ── python-http backend state ──
-        this._serverProc  = null;   // child_process.ChildProcess
-        this._serverPort  = null;   // number
+        this._serverProc  = null;
+        this._serverPort  = null;
         this._serverReady = false;
-        this._serverStart = null;   // shared Promise while starting up
+        this._serverStart = null;
 
         // ── llama-cpp backend state (legacy) ──
         this._llama            = null;
@@ -191,14 +184,9 @@ class LocalModelAdapter {
     //  Python HTTP backend
     // ──────────────────────────────────────────────────────
 
-    /**
-     * Ensure the Python inference server is running.
-     * Shared start Promise prevents double-spawn on concurrent callers.
-     */
     async _ensureServer(entry = {}) {
         if (this._serverReady) return;
         if (this._serverStart) return this._serverStart;
-
         this._serverStart = this._startServer(entry);
         await this._serverStart;
         this._serverStart = null;
@@ -212,7 +200,6 @@ class LocalModelAdapter {
         if (!python) throw new Error("[LocalModelAdapter] No Python executable found. Run Setup Local AI first.");
         if (!script)  throw new Error("[LocalModelAdapter] qwen_server.py not found in resources.");
 
-        // Check if something is already listening on the port
         const alive = await _ping(port);
         if (alive?.ok) {
             Middleware.log(`[LocalModelAdapter] Python server already running on :${port}`);
@@ -266,10 +253,9 @@ class LocalModelAdapter {
     async _generateViaHttp(prompt, opts = {}) {
         const { maxTokens = 512, temperature = 0.7, systemPrompt = "", port } = opts;
         await this._ensureServer({ port: port || this._serverPort || 17892 });
-
         return _httpGenerate(this._serverPort, {
             prompt,
-            system_prompt: systemPrompt,
+            system_prompt:  systemPrompt,
             max_new_tokens: maxTokens,
             temperature,
         });
@@ -286,17 +272,14 @@ class LocalModelAdapter {
         this._llamaLoading = (async () => {
             const t0 = Date.now();
             Middleware.log(`[LocalModelAdapter] Loading GGUF ${path.basename(modelPath)}…`);
-
             const { getLlama, LlamaChatSession } = await _llamaCpp();
             this._llama = await getLlama({ gpu: false });
             this._model = await this._llama.loadModel({ modelPath });
             this._ctx   = await this._model.createContext({ contextSize: 8192, batchSize: 512 });
-
             this._LlamaChatSession = LlamaChatSession;
             this._modelPath        = modelPath;
             this._llamaReady       = true;
             this._llamaLoading     = null;
-
             Middleware.log(`[LocalModelAdapter] GGUF ready in ${Date.now() - t0}ms`);
         })();
 
@@ -307,12 +290,6 @@ class LocalModelAdapter {
     //  Public API
     // ──────────────────────────────────────────────────────
 
-    /**
-     * Single-shot inference.
-     * opts.backend = "python-http" | "llama-cpp"  (auto-detected if omitted)
-     * opts.modelPath — required for llama-cpp
-     * opts.port      — optional override for python-http (default 17892)
-     */
     async generate(prompt, opts = {}) {
         const backend = opts.backend || (opts.modelPath ? "llama-cpp" : "python-http");
 
@@ -323,9 +300,8 @@ class LocalModelAdapter {
             return out;
         }
 
-        // llama-cpp path
         const { modelPath, maxTokens = 512, temperature = 0.15, systemPrompt = "" } = opts;
-        if (!modelPath)             throw new Error("[LocalModelAdapter] opts.modelPath required for llama-cpp backend");
+        if (!modelPath)                throw new Error("[LocalModelAdapter] opts.modelPath required for llama-cpp backend");
         if (!fs.existsSync(modelPath)) throw new Error(`[LocalModelAdapter] Model not found: ${modelPath}`);
 
         await this._ensureLlama(modelPath);
@@ -342,11 +318,6 @@ class LocalModelAdapter {
         return (result || "").trim();
     }
 
-    /**
-     * Streaming inference. Calls opts.onChunk(token) per token.
-     * python-http backend: full response arrives at once (no true streaming
-     * from the server yet), but onChunk is called once with the full text.
-     */
     async stream(prompt, opts = {}) {
         const backend = opts.backend || (opts.modelPath ? "llama-cpp" : "python-http");
 
@@ -356,9 +327,8 @@ class LocalModelAdapter {
             return text;
         }
 
-        // llama-cpp streaming path
         const { modelPath, maxTokens = 512, temperature = 0.15, systemPrompt = "", onChunk } = opts;
-        if (!modelPath)             throw new Error("[LocalModelAdapter] opts.modelPath required for llama-cpp backend");
+        if (!modelPath)                throw new Error("[LocalModelAdapter] opts.modelPath required for llama-cpp backend");
         if (!fs.existsSync(modelPath)) throw new Error(`[LocalModelAdapter] Model not found: ${modelPath}`);
 
         await this._ensureLlama(modelPath);
@@ -367,8 +337,7 @@ class LocalModelAdapter {
         let full = "";
         try {
             await session.prompt(prompt, {
-                maxTokens,
-                temperature,
+                maxTokens, temperature,
                 onTextChunk: (chunk) => {
                     full += chunk;
                     try { onChunk?.(chunk); } catch (_) {}
@@ -380,7 +349,6 @@ class LocalModelAdapter {
         return full.trim();
     }
 
-    /** Fast token count heuristic — no model load required. */
     estimateTokens(text = "") {
         if (!text) return 0;
         const words   = (text.match(/\S+/g) || []).length;
@@ -388,7 +356,6 @@ class LocalModelAdapter {
         return Math.ceil(words * 0.85 + symbols * 0.3);
     }
 
-    /** Calculate a safe maxTokens given prompt size and context budget. */
     calculateBudget({ promptText = "", systemText = "", contextSize = 8192, minResponse = 64, maxResponse = 2048 } = {}) {
         const promptTokens   = this.estimateTokens(promptText + " " + systemText);
         const safetyMargin   = 96;
@@ -402,10 +369,6 @@ class LocalModelAdapter {
         };
     }
 
-    /**
-     * Graceful shutdown: kill the Python server process if we spawned it.
-     * Called by the sidecar on SIGTERM/exit.
-     */
     shutdown() {
         if (this._serverProc) {
             Middleware.log("[LocalModelAdapter] Killing qwen_server process...");

@@ -36,17 +36,15 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # ── Checkout ───────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── Toolchains ─────────────────────────────────────────
       - name: Setup Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: tauri-app/package-lock.json
+          cache-dependency-path: tauri-app/package.json
 
       - name: Setup Rust (stable, MSVC)
         uses: dtolnay/rust-toolchain@stable
@@ -58,10 +56,8 @@ jobs:
         with:
           workspaces: tauri-app/src-tauri -> target
 
-      # ── Bundle embedded Python ─────────────────────────────
       # Downloads the official Windows embeddable Python (~12 MB).
-      # This becomes the interpreter ProtoAI uses to run qwen_server.py
-      # and bootstrap.py — users do NOT need Python installed separately.
+      # Users do NOT need Python installed separately.
       - name: Bundle embedded Python 3.11 runtime
         shell: pwsh
         run: |
@@ -70,11 +66,9 @@ jobs:
 
           Write-Host "Downloading embedded Python $env:PYTHON_EMBED_VERSION..."
           Invoke-WebRequest -Uri $env:PYTHON_EMBED_URL -OutFile "python-embed.zip" -UseBasicParsing
-
-          Write-Host "Extracting..."
           Expand-Archive -Path "python-embed.zip" -DestinationPath $dest -Force
 
-          # Patch ._pth file: uncomment 'import site' so pip/packages work
+          # Patch ._pth to enable site-packages (required for pip)
           $pthFile = Get-ChildItem $dest -Filter "*.pth" | Select-Object -First 1
           if ($pthFile) {
             (Get-Content $pthFile.FullName) -replace '#import site', 'import site' |
@@ -83,27 +77,18 @@ jobs:
           }
 
           # Bundle get-pip.py so bootstrap.py can install pip on first run
-          Write-Host "Downloading get-pip.py..."
           Invoke-WebRequest -Uri $env:GET_PIP_URL -OutFile "$dest/get-pip.py" -UseBasicParsing
-
           Write-Host "Embedded Python bundle ready:"
           Get-ChildItem $dest | Select-Object Name, Length | Format-Table -AutoSize
 
-      # ── Node dependencies ──────────────────────────────────
       - name: Install Node dependencies
         working-directory: tauri-app
-        run: npm ci
+        run: npm install
 
-      # ── Tauri build ────────────────────────────────────────
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Tauri updater signing — generate keypair once with:
-          #   npx tauri signer generate -w ~/.tauri/protoai.key
-          # Then add to repo secrets:
-          #   TAURI_SIGNING_PRIVATE_KEY        (contents of .key file)
-          #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
@@ -117,12 +102,12 @@ jobs:
             1. Download and run **ProtoAI_x64-setup.exe**
             2. Launch ProtoAI
             3. First launch: open **Settings → Local AI → Setup Local AI** to install
-               the Qwen2.5-Omni-7B model (one-time ~4 GB Python env setup + ~15 GB model download)
+               the Qwen2.5-Omni-7B model (one-time ~4 GB Python env + ~15 GB model download)
 
             ### What's bundled
             - ProtoAI desktop app (Tauri + Node.js sidecar)
             - Embedded Python 3.11 runtime (no separate Python install required)
-            - Qwen2.5-Omni-7B inference server (model auto-downloaded from HuggingFace on first setup)
+            - Qwen2.5-Omni-7B inference server (model downloaded from HuggingFace on first setup)
 
             ### Auto-updates
             ProtoAI checks for updates automatically and will notify you when a new version is available.
@@ -132,12 +117,7 @@ jobs:
 
       # ── SignPath code signing ──────────────────────────────
       # ACTIVATE once your SignPath.org application is approved.
-      #
-      # Required repo secrets:
-      #   SIGNPATH_API_TOKEN         — from SignPath account settings
-      #   SIGNPATH_ORGANIZATION_ID   — from your SignPath org URL slug
-      #
-      # Then uncomment and fill in project-slug / signing-policy-slug:
+      # Add secrets: SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID
       #
       # - name: Sign installer with SignPath
       #   uses: signpath/github-action-submit-signing-request@v1
@@ -151,7 +131,6 @@ jobs:
       #     wait-for-completion: true
       #     output-artifact-directory: signed-artifacts/
 
-      # ── Keep build artifacts for 7 days for debugging ──────
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
         if: always()

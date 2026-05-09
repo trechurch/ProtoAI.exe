@@ -16,7 +16,7 @@
 // Invoked via:
 //   backendConnector.runWorkflow("SysProvisionModel", { model?, cuda? })
 //
-// Events emitted (via sidecar EventBus → Tauri → UI):
+// Events emitted:
 //   sys:provision:progress  { step, total, label, sub?, pct }
 //   sys:provision:done      { venv, model }
 //   sys:provision:error     { error }
@@ -45,8 +45,6 @@ class SysProvisionModelWorkflow extends WorkflowBase {
         }
     };
 
-    // ── Locate bundled bootstrap.py ──────────────────────────
-
     _findBootstrap() {
         const candidates = [
             path.join(paths.root, "server", "local_model", "bootstrap.py"),
@@ -58,19 +56,15 @@ class SysProvisionModelWorkflow extends WorkflowBase {
         return null;
     }
 
-    // ── Locate embedded Python runtime ───────────────────────
-
     _findEmbeddedPython() {
         const embedDir = path.join(paths.root, "python-embed");
         const embedPy  = path.join(embedDir, "python.exe");
         if (fs.existsSync(embedPy)) return { exe: embedPy, dir: embedDir };
 
-        // Dev fallback: check venv first, then system Python
-        const appdata  = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
-        const venvPy   = path.join(appdata, "protoai", "ai_env", "Scripts", "python.exe");
+        const appdata = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
+        const venvPy  = path.join(appdata, "protoai", "ai_env", "Scripts", "python.exe");
         if (fs.existsSync(venvPy)) return { exe: venvPy, dir: null };
 
-        // Last resort: system python
         for (const name of ["python3", "python"]) {
             try {
                 require("child_process").execSync(`${name} --version`, { stdio: "ignore" });
@@ -80,24 +74,16 @@ class SysProvisionModelWorkflow extends WorkflowBase {
         return null;
     }
 
-    // ── EventBus emit helper ─────────────────────────────────
-
     _emit(eventName, payload) {
         try {
             const EventBus = require("../../services/EventBus.service");
             EventBus.emit(eventName, payload);
-        } catch (_) {
-            // EventBus may not be available in test contexts
-        }
+        } catch (_) {}
     }
-
-    // ── Main run ─────────────────────────────────────────────
 
     async run(context = {}) {
         const modelName = context.model || "Qwen/Qwen2.5-Omni-7B";
         const cuda      = !!context.cuda;
-
-        // ── Pre-flight checks ────────────────────────────────
 
         const bootstrap = this._findBootstrap();
         if (!bootstrap) {
@@ -120,22 +106,12 @@ class SysProvisionModelWorkflow extends WorkflowBase {
         console.error(`[SysProvisionModel] Venv target: ${venvPath}`);
         console.error(`[SysProvisionModel] Model: ${modelName}`);
 
-        // Build args for bootstrap.py
-        const args = [
-            bootstrap,
-            "--model", modelName,
-            "--venv",  venvPath,
-        ];
+        const args = [bootstrap, "--model", modelName, "--venv", venvPath];
         if (pyInfo.dir) args.push("--embed-dir", pyInfo.dir);
         if (cuda)       args.push("--cuda");
 
-        // ── Spawn bootstrap ──────────────────────────────────
-
         return new Promise((resolve) => {
-            const proc = spawn(pyInfo.exe, args, {
-                stdio: ["ignore", "pipe", "pipe"],
-            });
-
+            const proc = spawn(pyInfo.exe, args, { stdio: ["ignore", "pipe", "pipe"] });
             let lastProgress = null;
 
             proc.stdout.on("data", (chunk) => {
@@ -147,37 +123,29 @@ class SysProvisionModelWorkflow extends WorkflowBase {
                     if (parsed.done) {
                         this._emit("sys:provision:done", { venv: parsed.venv, model: parsed.model });
                         resolve(WorkflowResult.ok({ venv: parsed.venv, model: parsed.model }));
-
                     } else if (parsed.error) {
                         this._emit("sys:provision:error", { error: parsed.error });
                         resolve(WorkflowResult.error(parsed.error));
-
                     } else if (parsed.step !== undefined) {
                         lastProgress = parsed;
                         this._emit("sys:provision:progress", parsed);
-                        const pctStr = parsed.pct ? ` (${parsed.pct}%)` : "";
-                        const sub    = parsed.sub ? ` — ${parsed.sub}` : "";
-                        console.error(`[SysProvisionModel] [${parsed.step}/${parsed.total}] ${parsed.label}${pctStr}${sub}`);
+                        const sub = parsed.sub ? ` — ${parsed.sub}` : "";
+                        console.error(`[SysProvisionModel] [${parsed.step}/${parsed.total}] ${parsed.label}${sub}`);
                     }
                 }
             });
 
             proc.stderr.on("data", (chunk) => {
-                // Log stderr (pip noise, torch download bars, etc.) at debug level
                 const text = chunk.toString().trim();
                 if (text) console.error(`[bootstrap:err] ${text}`);
             });
 
-            proc.on("exit", (code, signal) => {
-                if (code === 0) {
-                    // Process exited cleanly before emitting done — shouldn't happen
-                    // but handle gracefully
-                    if (!lastProgress?.done) {
-                        this._emit("sys:provision:done", { venv: venvPath, model: modelName });
-                        resolve(WorkflowResult.ok({ venv: venvPath, model: modelName }));
-                    }
-                } else {
-                    const err = `bootstrap.py exited with code ${code}${signal ? ` (signal: ${signal})` : ""}`;
+            proc.on("exit", (code) => {
+                if (code === 0 && !lastProgress?.done) {
+                    this._emit("sys:provision:done", { venv: venvPath, model: modelName });
+                    resolve(WorkflowResult.ok({ venv: venvPath, model: modelName }));
+                } else if (code !== 0) {
+                    const err = `bootstrap.py exited with code ${code}`;
                     this._emit("sys:provision:error", { error: err });
                     resolve(WorkflowResult.error(err));
                 }
